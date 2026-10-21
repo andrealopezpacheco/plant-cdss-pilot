@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Interactive odontogram · Implant Planning Decision Explorer</title>
+<style>
+:root{--navy:#435881;--dark:#273246;--teal:#489595;--lime:#c7cf58;--light:#f8fbfb;--line:#dfe9ea;--muted:#71818c}
+*{box-sizing:border-box}
+html,body{background:#fff;color:var(--dark);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;margin:0;line-height:1.5}
+#wrapper{background:#fff;border:1px solid var(--line);border-radius:18px;overflow:hidden;margin:1px 2px 4px;box-shadow:0 2px 16px rgba(28,64,77,.035)}
+.top{padding:22px 24px 17px;display:flex;gap:12px;align-items:start;justify-content:space-between}
+h2{font-size:21px;letter-spacing:-.03em;margin:0;color:var(--navy);line-height:1.3}
+.subtitle{color:var(--muted);font-size:12px;margin:6px 0 0}
+.counter{background:#eaf5f1;color:#226c6c;border-radius:99px;padding:6px 13px;font-size:12px;white-space:nowrap;font-weight:700}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;padding:0 24px 20px}
+.tab{cursor:pointer;appearance:none;border:1px solid #dbe5e8;border-radius:10px;background:white;padding:9px 14px;font-size:12px;font-weight:650;color:#52637b;transition:.12s}
+.tab:focus-visible,.tooth:focus-visible,.smallbtn:focus-visible{outline:3px solid #a0d0cd;outline-offset:2px}
+.tab.active{background:#236e76;color:white;border-color:#236e76}
+.tab:hover:not(.active){border-color:var(--teal);background:#f3f9f8}
+.chart{background:#fcfdfd;border:1px solid #e3ecee;border-radius:14px;margin:0 16px 17px;padding:16px 10px 11px;overflow-x:auto}
+.inner{min-width:810px;max-width:1120px;margin:0 auto}
+.arch-title{display:flex;justify-content:space-between;gap:12px;padding:0 7px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--navy);font-size:11px;font-weight:800}
+.arch-title span:last-child{color:#89989e;font-size:10px;font-weight:500;text-transform:none;letter-spacing:normal}
+.teeth{display:grid;grid-template-columns:repeat(16,minmax(0,1fr));gap:2px;position:relative}
+.teeth::after{content:"";height:89%;top:5%;position:absolute;left:50%;border-left:1px dashed #bfcacf;pointer-events:none}
+.tooth{border:1.5px solid transparent;background:transparent;border-radius:10px;min-width:0;position:relative;padding:8px 2px 9px;display:flex;align-items:center;flex-direction:column;cursor:pointer;transition:.14s ease}
+.tooth:hover{background:#eef8f6;border-color:#d3e7e4}
+.tooth.selected{background:#eff7e9;border-color:#61a8a1;box-shadow:inset 0 0 0 1px #b9dad0}
+.fdi{font-size:13px;font-weight:820;color:#435881;line-height:1.35}
+.universal{font-size:10px;color:#8698a0;line-height:1.55}
+.tooth.selected .fdi,.tooth.selected .universal{color:#196d6b}
+.tooth img{max-width:100%;height:91px;max-height:91px;width:auto;object-fit:contain;margin:6px 0 0;pointer-events:none}
+.check{display:none;position:absolute;right:2px;top:2px;background:#2b8e8a;color:white;font-size:9px;width:15px;height:15px;border-radius:50%;align-items:center;justify-content:center}
+.tooth.selected .check{display:flex}
+.arch-divider{height:1px;background:linear-gradient(90deg,transparent,#cddcdd 9%,#cddcdd 91%,transparent);margin:13px 6px 14px}
+.orientation{display:flex;justify-content:space-between;padding:14px 7px 1px;font-size:11px;font-weight:650;color:#778c9b}
+.footer{padding:15px 24px;display:flex;gap:16px;justify-content:space-between;align-items:center;border-top:1px solid #edf1f2;background:#fafdfd;min-height:66px}
+.selected-area{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.label{font-weight:800;font-size:12px;color:var(--navy)}
+.chip{display:inline-flex;align-items:center;border-radius:8px;padding:6px 10px;background:#e5f2f0;color:#176f6c;font-size:11px;font-weight:720;border:1px solid #c7e3df;white-space:nowrap}
+.smallbtn{background:#fff;border:1px solid #d9e6e6;color:#435881;border-radius:9px;padding:8px 11px;white-space:nowrap;font-size:11px;font-weight:650;cursor:pointer}
+.smallbtn:hover{background:#eaf5f1}
+.note{font-size:11px;color:#86969c;padding:11px 24px 16px;background:#fff}
+.warning{color:#986f29;font-size:11px;font-weight:650;padding:0 24px 12px}
+.edentulous{padding:35px 10px 43px;text-align:center;color:#647480}
+.edentulous h3{color:var(--navy);font-size:17px;margin:0 0 8px}
+.arch-choices{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:18px}
+.arch-choice{padding:11px 25px}
+@media(max-width:850px){.top{padding:16px 15px 13px}.tabs{padding:0 14px 16px}.tab{padding:8px 10px}.chart{margin:0 8px 12px}.footer{padding:13px 14px}.note{padding:10px 14px}h2{font-size:18px}}
+</style>
+</head>
+<body>
+<main id="wrapper" aria-label="Interactive permanent-dentition odontogram">
+<div class="top"><div><h2>Select teeth to replace</h2><p class="subtitle">Choose directly from the odontogram. FDI and Universal codes appear together.</p></div><div class="counter" id="counter">1 tooth selected</div></div>
+<div class="tabs" role="group" aria-label="Case type">
+ <button type="button" class="tab" data-mode="CASE-TYPE-SINGLE">Single Tooth</button>
+ <button type="button" class="tab" data-mode="CASE-TYPE-SHORT">Short Span (≤ 3)</button>
+ <button type="button" class="tab" data-mode="CASE-TYPE-EXT">Extended Span (&gt; 3)</button>
+ <button type="button" class="tab" data-mode="CASE-TYPE-EDENT">Edentulous</button>
+</div>
+<div class="chart" id="chart"></div>
+<div class="warning" id="warning" hidden></div>
+<div class="footer"><div class="selected-area"><span class="label" id="selected-label">Selected teeth</span><span id="selected-pills"></span></div><button type="button" class="smallbtn" id="clear">Clear selection</button></div>
+<div class="note" id="note">FDI identifiers are stored in the clinical case. Tooth selection does not determine treatment timing.</div>
+</main>
+<script>
+"use strict";
+const UPPER=["18","17","16","15","14","13","12","11","21","22","23","24","25","26","27","28"];
+const LOWER=["48","47","46","45","44","43","42","41","31","32","33","34","35","36","37","38"];
+const ORDER=[...UPPER,...LOWER];
+const VALID_MODES=new Set(["CASE-TYPE-SINGLE","CASE-TYPE-SHORT","CASE-TYPE-EXT","CASE-TYPE-EDENT"]);
+const UNIV=Object.fromEntries([...UPPER.map((f,i)=>[f,i+1]),...LOWER.map((f,i)=>[f,32-i])]);
+let state={case_type:"CASE-TYPE-SINGLE",teeth:["16"],arch:"Maxilla"};
+let connected=false;
+function message(type,data={}){
+ if(window.parent===window)return;
+ window.parent.postMessage({isStreamlitMessage:true,type,...data},"*");
+}
+function resize(){const height=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight)+6;message("streamlit:setFrameHeight",{height})}
+function clean(data){
+ const mode=VALID_MODES.has(data.case_type)?data.case_type:"CASE-TYPE-SINGLE";
+ let teeth=Array.isArray(data.teeth)?[...new Set(data.teeth.map(String).filter(x=>Object.hasOwn(UNIV,x)))]:[];
+ if(mode==="CASE-TYPE-SINGLE")teeth=teeth.slice(0,1);
+ if(mode==="CASE-TYPE-SHORT")teeth=teeth.slice(0,3);
+ if(mode==="CASE-TYPE-EDENT")teeth=[];
+ const arch=data.arch==="Mandible"?"Mandible":"Maxilla";
+ return {case_type:mode,teeth,arch};
+}
+function update(next){state=clean(next);render();message("streamlit:setComponentValue",{value:state,dataType:"json"})}
+function toothButton(fdi){const chosen=state.teeth.includes(fdi);
+ const btn=document.createElement('button');btn.type="button";btn.className='tooth'+(chosen?' selected':'');btn.dataset.fdi=fdi;btn.setAttribute('aria-label',`FDI ${fdi}, Universal ${UNIV[fdi]}${chosen?', selected':''}`);btn.setAttribute('aria-pressed',String(chosen));
+ btn.innerHTML=`<span class="check" aria-hidden="true">✓</span><span class="fdi">${fdi}</span><span class="universal">#${UNIV[fdi]}</span><img src="images/${fdi}.png" alt="" aria-hidden="true">`;
+ btn.addEventListener("click",()=>{
+  let teeth=[...state.teeth];
+  if(state.case_type==="CASE-TYPE-SINGLE")teeth=[fdi];
+  else if(chosen)teeth=teeth.filter(x=>x!==fdi);
+  else if(state.case_type==="CASE-TYPE-SHORT" && teeth.length>=3){warn("Short Span allows a maximum of 3 selected teeth.");return;}
+  else teeth.push(fdi);
+  teeth.sort((a,b)=>ORDER.indexOf(a)-ORDER.indexOf(b));update({...state,teeth});
+ });
+ return btn;
+}
+function warn(text){let el=document.getElementById('warning');el.textContent=text;el.hidden=!text;resize();}
+function render(){
+ document.querySelectorAll('.tab').forEach(el=>{const isCurrent=el.dataset.mode===state.case_type;el.classList.toggle('active',isCurrent);el.setAttribute('aria-pressed',String(isCurrent));});
+ const edent=state.case_type==="CASE-TYPE-EDENT";
+ const counter=document.getElementById('counter');counter.textContent=edent?"Full-arch case":`${state.teeth.length} ${state.teeth.length===1?'tooth':'teeth'} selected`;
+
+ const chart=document.getElementById('chart');chart.replaceChildren();
+ if(edent){
+  const holder=document.createElement('div');holder.className='edentulous';holder.innerHTML='<h3>Edentulous case</h3><p>Select the edentulous arch for subsequent assessment.</p><div class="arch-choices"><button type="button" class="tab arch-choice" data-arch="Maxilla">Maxilla</button><button type="button" class="tab arch-choice" data-arch="Mandible">Mandible</button></div><p style="font-size:11px;margin-top:22px">Full-arch surgical planning is outside the current single-tooth prototype.</p>';
+  chart.append(holder);holder.querySelectorAll('[data-arch]').forEach(button=>{button.classList.toggle('active',button.dataset.arch===state.arch);button.setAttribute('aria-pressed',String(button.dataset.arch===state.arch));button.addEventListener('click',()=>update({...state,arch:button.dataset.arch}))});
+ }else{
+  const container=document.createElement('div');container.className='inner';
+  const arch=(name,list)=>{const cap=document.createElement('div');cap.className='arch-title';cap.innerHTML=`<span>${name}</span><span>FDI above · Universal below</span>`;const row=document.createElement('div');row.className='teeth';list.forEach(f=>row.append(toothButton(f)));container.append(cap,row)};
+  arch('MAXILLA (UPPER)',UPPER);
+  const separator=document.createElement('div');separator.className='arch-divider';container.append(separator);
+  arch('MANDIBLE (LOWER)',LOWER);
+  const orient=document.createElement('div');orient.className='orientation';orient.innerHTML='<span>← Patient\'s Right</span><span>Patient\'s Left →</span>';container.append(orient);chart.append(container);
+ }
+ const selected=document.getElementById('selected-pills');selected.replaceChildren();
+ document.getElementById('selected-label').textContent=edent?'Selected arch':'Selected teeth';
+ const list=edent?[state.arch]:state.teeth.map(f=>`FDI ${f} / #${UNIV[f]}`);
+ if(!list.length){selected.textContent='No teeth selected';selected.style.color='#82949a';selected.style.fontSize='11px'}
+ else {selected.style.color='';selected.style.fontSize='';list.forEach(item=>{const chip=document.createElement('span');chip.className='chip';chip.textContent=item;selected.append(chip);selected.append(' ')})}
+ document.getElementById('clear').hidden=edent;
+ document.getElementById('note').textContent=edent?'The edentulous arch is stored in the clinical case.':'FDI identifiers are stored in the clinical case. Tooth selection does not determine treatment timing.';
+ let validation='';
+ if(state.case_type==='CASE-TYPE-EXT' && state.teeth.length>0 && state.teeth.length<=3)validation='Extended Span is defined as more than 3 teeth. Select at least 4 teeth.';
+ if(state.case_type==='CASE-TYPE-SHORT' && state.teeth.length===0)validation='Select one or more teeth for this Short Span case.';
+ if(state.case_type==='CASE-TYPE-SINGLE' && state.teeth.length===0)validation='Select one tooth to replace.';
+ warn(validation);
+ resize();
+}
+document.querySelectorAll('[data-mode]').forEach(btn=>btn.addEventListener('click',()=>{const newMode=btn.dataset.mode;if(newMode===state.case_type)return;update({...state,case_type:newMode})}));
+document.getElementById('clear').addEventListener('click',()=>update({...state,teeth:[]}));
+window.addEventListener('message',e=>{
+ if(!e.data || e.data.type!=="streamlit:render")return;
+ connected=true;
+ const args=e.data.args||{};
+ state=clean({case_type:args.case_type,teeth:args.teeth,arch:args.arch});
+ render();
+});
+window.addEventListener('resize',resize);
+// Standalone HTML preview also works without Streamlit.
+render();
+message('streamlit:componentReady',{apiVersion:1});
+</script>
+</body>
+</html>
