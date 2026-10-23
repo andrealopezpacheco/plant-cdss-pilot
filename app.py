@@ -141,6 +141,13 @@ AGES = {
  'PAT-AGE-A30_59':'Adulthood · 30–59',
  'PAT-AGE-O60P':'Older adult · 60+'
 }
+def age_group(years):
+    # Age in years -> group code. Bands do not overlap: <18, 18-29, 30-59, >=60.
+    if years is None: return None
+    if years<18: return 'PAT-AGE-U18'
+    if years<30: return 'PAT-AGE-Y18_29'
+    if years<60: return 'PAT-AGE-A30_59'
+    return 'PAT-AGE-O60P'
 CASE_TYPES = {
  'CASE-TYPE-SINGLE':'Single Tooth',
  'CASE-TYPE-SHORT':'Short Span (≤ 3 teeth)',
@@ -164,9 +171,10 @@ QUADRANTS = [
 FDI_UNI = {fdi:universal for _,teeth in QUADRANTS for fdi,universal in teeth}
 
 if 'record' not in st.session_state:
- st.session_state.record = {'age':'PAT-AGE-A30_59','needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':['16'],'site':'CASE-SITE-HEALED','esthetic':'No'}
+ st.session_state.record = {'needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':['16'],'site':'CASE-SITE-HEALED','esthetic':'No'}
 if 'step' not in st.session_state: st.session_state.step=0
 record=st.session_state.record
+record['age']=age_group(record.get('age_years'))  # derived before the sidebar renders
 
 def field(name, widget, label, *, default=None, **kwargs):
     k='ui_'+name
@@ -249,7 +257,7 @@ with st.sidebar:
   if st.button(MODULES[i],key=f'side_{i}',use_container_width=True,type='primary' if st.session_state.step==i else 'secondary'):goto(i)
  if st.button('Case Summary',use_container_width=True,type='primary' if st.session_state.step==8 else 'secondary'):goto(8)
  if st.button('Reset demo case',use_container_width=True):
-  st.session_state.record={'age':'PAT-AGE-A30_59','needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':['16'],'site':'CASE-SITE-HEALED','esthetic':'No'}
+  st.session_state.record={'needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':['16'],'site':'CASE-SITE-HEALED','esthetic':'No'}
   for k in list(st.session_state.keys()):
    if k.startswith('ui_'):del st.session_state[k]
   goto(0)
@@ -265,7 +273,8 @@ else:st.subheader('Case Summary · Shared Decision-Making')
 if step==0:
  st.caption('Module PAT: complete this first; values are reused in clinical proposals and the patient snapshot.')
  field('name',st.text_input,'Patient name / study pseudonym',default='',placeholder='Demo Patient 01')
- choose('age','Age group',AGES)
+ field('age_years',st.number_input,'Age (years)',default=None,value=None,min_value=0,max_value=110,step=1,placeholder='Enter age in years')
+ if r('age'):st.caption('Age group (automatic): '+AGES[r('age')])
  listfield('needs','Patient needs and concerns · select all that apply',NEEDS,max_selections=8)
  # Human readable priority-order among selected options.
  selected=r('needs',[])
