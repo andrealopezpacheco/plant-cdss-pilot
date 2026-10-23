@@ -133,6 +133,8 @@ NEEDS = {
  'PAT-NEED-ESTH':'Esthetic outcomes',
  'PAT-NEED-HYG':'Easy maintenance and hygiene'
 }
+NO_PRIORITY='PAT-NEED-NONE'
+PRIORITY_LABELS={NO_PRIORITY:'No specific priority',**NEEDS}
 AGES = {
  'PAT-AGE-U18':'Adolescence · under 18',
  'PAT-AGE-Y18_29':'Young adult · 18–29',
@@ -241,10 +243,10 @@ with st.sidebar:
  # 3 · Treatment sequence and recommendations
  st.markdown('<div class="side-nav section-label">Case Navigation</div>',unsafe_allow_html=True)
  for i in range(4):
-  if st.button(f'{i+1:02d}  {MODULES[i]}',key=f'side_{i}',use_container_width=True,type='primary' if st.session_state.step==i else 'secondary'):goto(i)
+  if st.button(MODULES[i],key=f'side_{i}',use_container_width=True,type='primary' if st.session_state.step==i else 'secondary'):goto(i)
  st.markdown('<div class="side-nav section-label">Proposals</div>',unsafe_allow_html=True)
  for i in range(4,8):
-  if st.button(f'{i+1:02d}  {MODULES[i]}',key=f'side_{i}',use_container_width=True,type='primary' if st.session_state.step==i else 'secondary'):goto(i)
+  if st.button(MODULES[i],key=f'side_{i}',use_container_width=True,type='primary' if st.session_state.step==i else 'secondary'):goto(i)
  if st.button('Case Summary',use_container_width=True,type='primary' if st.session_state.step==8 else 'secondary'):goto(8)
  if st.button('Reset demo case',use_container_width=True):
   st.session_state.record={'age':'PAT-AGE-A30_59','needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':['16'],'site':'CASE-SITE-HEALED','esthetic':'No'}
@@ -268,11 +270,12 @@ if step==0:
  # Human readable priority-order among selected options.
  selected=r('needs',[])
  if selected:
-  if r('top_priority') not in selected or st.session_state.get('ui_top_priority',r('top_priority')) not in selected:
-   record['top_priority']=selected[0]
-   st.session_state.pop('ui_top_priority',None)
-  ranked=field('top_priority',st.selectbox,'Most important concern',default=selected[0] if r('top_priority') not in selected else r('top_priority'),options=selected,format_func=lambda k:NEEDS[k])
-  st.caption('This priority influences how viable plans are compared, not clinical eligibility.')
+  prio_opts=[NO_PRIORITY]+selected
+  if r('top_priority') not in prio_opts:record['top_priority']=NO_PRIORITY
+  if st.session_state.get('ui_top_priority',NO_PRIORITY) not in prio_opts:st.session_state.pop('ui_top_priority',None)
+  ranked=field('top_priority',st.selectbox,'Most important concern',default=NO_PRIORITY,options=prio_opts,format_func=lambda k:PRIORITY_LABELS[k])
+  if r('top_priority')==NO_PRIORITY:st.caption('No single priority is highlighted; the selected concerns are shown without ranking.')
+  else:st.caption('This priority influences how viable plans are compared, not clinical eligibility.')
  if r('age')=='PAT-AGE-U18':notice('Assess completion of craniofacial growth; avoid assuming implant eligibility from chronological age alone.')
  if r('age')=='PAT-AGE-O60P':st.info('Evaluate individual dexterity, medical status and maintenance needs; age alone is not a contraindication.')
 
@@ -311,11 +314,6 @@ elif step==1:
   if case_type=='CASE-TYPE-SHORT':st.caption('Short Span allows up to three teeth. To select another, deselect one first.')
  choose('esthetic','Does this case involve an esthetic concern?',['No','Yes'])
  choose('site','Current site condition',SITE)
- if r('site')!='CASE-SITE-EXTRACT':
-  numeric('weeks','Weeks since extraction (optional)',max_value=520,step=1.0)
-  w=r('weeks')
-  if w is not None and ((r('site')=='CASE-SITE-SOFT' and not 4<=w<=8) or (r('site')=='CASE-SITE-PARTIAL' and not 12<=w<=16) or (r('site')=='CASE-SITE-HEALED' and w<26)):
-   notice('Reported time and selected healing category may not align. Confirm clinical healing; timing alone cannot establish suitability.')
  if r('site')=='CASE-SITE-EXTRACT':st.info('Tooth is still present. Evaluate extraction considerations and potential timing options later; Type 1 is not assumed.')
 
 elif step==2:
