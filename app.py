@@ -141,6 +141,11 @@ AGES = {
  'PAT-AGE-A30_59':'Adulthood · 30–59',
  'PAT-AGE-O60P':'Older adult · 60+'
 }
+AGE_SCALE=[('PAT-AGE-U18','Under 18','Adolescence'),('PAT-AGE-Y18_29','18–29','Young adult'),('PAT-AGE-A30_59','30–59','Adulthood'),('PAT-AGE-O60P','60+','Older adult')]
+AGE_SHORT={c:n for c,_,n in AGE_SCALE}
+def age_scale_text(current=None):
+    # Reminder of the classification scale; the band that matches the entered age is in bold.
+    return 'Scale: '+' · '.join(('**'+rng+' '+name+'**') if code==current else rng+' '+name for code,rng,name in AGE_SCALE)
 def age_group(years):
     # Age in years -> group code. Bands do not overlap: <18, 18-29, 30-59, >=60.
     if years is None: return None
@@ -239,7 +244,7 @@ with st.sidebar:
  if r('case_type')=='CASE-TYPE-EDENT':case_line='Edentulous · '+str(r('arch','Arch not selected'))
  else:case_line=CASE_TYPES.get(r('case_type'),'Case not set')+' · '+', '.join(r('teeth',[]))+' (FDI)'
  st.markdown('<div class="side-name">'+escape(r('name','') or 'Patient name not entered')+'</div>'
-  '<div class="side-meta">'+escape(AGES.get(r('age'),'Age not recorded'))+'<br>'+escape(case_line)+'</div>',unsafe_allow_html=True)
+  '<div class="side-meta">'+escape(f"{int(r('age_years'))} years ({AGE_SHORT[r('age')]})" if r('age') else 'Age not recorded')+'<br>'+escape(case_line)+'</div>',unsafe_allow_html=True)
  # 2 · Patient priorities (most important first)
  needs=[n for n in r('needs',[]) if n in NEEDS]
  top=r('top_priority')
@@ -275,6 +280,7 @@ if step==0:
  field('name',st.text_input,'Patient name / study pseudonym',default='',placeholder='Demo Patient 01')
  field('age_years',st.number_input,'Age (years)',default=None,value=None,min_value=0,max_value=110,step=1,placeholder='Enter age in years')
  if r('age'):st.caption('Age group (automatic): '+AGES[r('age')])
+ st.caption(age_scale_text(r('age')))
  listfield('needs','Patient needs and concerns · select all that apply',NEEDS,max_selections=8)
  # Human readable priority-order among selected options.
  selected=r('needs',[])
