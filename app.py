@@ -1,3 +1,4 @@
+import base64
 import json
 from html import escape
 from pathlib import Path
@@ -113,6 +114,8 @@ st.markdown("""<style>
 .small-muted {font-size:.82rem;color:#536576}
 .side-name {font-size:1.75rem;font-weight:800;line-height:1.15;color:#435881;letter-spacing:-.02em;margin:4px 0 6px}
 .side-meta {font-size:.86rem;color:#536576;line-height:1.55}
+.side-head {display:flex;align-items:center;gap:14px;margin:2px 0 4px}
+.side-avatar {width:58px;height:58px;flex:none}
 .prio-item {padding:4px 0;color:#273246;font-size:.95rem;line-height:1.35}
 .prio-top {font-weight:800}
 .side-nav {margin:18px 0 6px}
@@ -149,6 +152,8 @@ AGE_SHORT={c:n for c,_,n in AGE_SCALE}
 def age_scale_text(current=None):
     # Reminder of the classification scale; the band that matches the entered age is in bold.
     return 'Scale: '+' · '.join(('**'+rng+' '+name+'**') if code==current else rng+' '+name for code,rng,name in AGE_SCALE)
+AVATAR_SVG='<svg xmlns="http://www.w3.org/2000/svg" viewBox="8 2 48 60"><path d="M32 4a14 14 0 0 0 0 28z" fill="#D8DE8C"/><path d="M32 4a14 14 0 0 1 0 28z" fill="#C7CF58"/><path d="M32 36c-13 0-22 7-22 20 0 3 2 4 5 4h17z" fill="#6FB0B0"/><path d="M32 36c13 0 22 7 22 20 0 3-2 4-5 4H32z" fill="#489595"/></svg>'
+AVATAR_URI='data:image/svg+xml;base64,'+base64.b64encode(AVATAR_SVG.encode()).decode()
 def age_group(years):
     # Age in years -> group code. Bands do not overlap: <18, 18-29, 30-59, >=60.
     if years is None: return None
@@ -267,8 +272,8 @@ with st.sidebar:
  # 1 · Patient name (large) + compact context
  if r('case_type')=='CASE-TYPE-EDENT':case_line='Edentulous · '+str(r('arch','Arch not selected'))
  else:case_line=CASE_TYPES.get(r('case_type'),'Case not set')+' · '+', '.join(r('teeth',[]))+' (FDI)'
- st.markdown('<div class="side-name">'+escape(r('name','') or 'Patient name not entered')+'</div>'
-  '<div class="side-meta">'+escape(f"{int(r('age_years'))} years ({AGE_SHORT[r('age')]})" if r('age') else 'Age not recorded')+'<br>'+escape(case_line)+'</div>',unsafe_allow_html=True)
+ st.markdown('<div class="side-head"><img class="side-avatar" src="'+AVATAR_URI+'" alt=""><div><div class="side-name">'+escape(r('name','') or 'Patient name not entered')+'</div>'
+  '<div class="side-meta">'+escape(f"{int(r('age_years'))} years ({AGE_SHORT[r('age')]})" if r('age') else 'Age not recorded')+'<br>'+escape(case_line)+'</div></div></div>',unsafe_allow_html=True)
  # 2 · Patient priorities (most important first)
  needs=[n for n in r('needs',[]) if n in NEEDS]
  top=r('top_priority')
