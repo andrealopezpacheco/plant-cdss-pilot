@@ -423,25 +423,35 @@ elif step==2:
  if any(c in (r('pro_space_lim',[]) or []) for c in ('PRO-SPACELIM-RED_V','PRO-SPACELIM-RED_MD')):st.info('Reduced restorative space recorded: evaluate space-gaining or alternative restorative strategies when indicated.')
 
 elif step==3:
- st.caption('CBCT measurements are interpreted relative to the prosthetically ideal implant position.')
- left,right=st.columns(2)
- with left:
-  numeric('ridge_height','Residual bone height (mm)')
-  numeric('ridge_width','Ridge width (mm)')
-  numeric('md_bone','Mesiodistal space between adjacent roots (mm)')
-  numeric('supracrestal','Supracrestal tissue height (mm)',max_value=20)
-  numeric('mouth_opening','Maximal mouth opening (mm)',max_value=80,step=1.)
- with right:
-  if is_maxillary():
-   pick('sinus','Sinus assessment',opts('SINUS',[('NONE','No evident disease',''),('POSSIBLE','Possible sinus pathology',''),('TREATED','Previously treated sinus condition','')],prefix='SUR'))
-  else:clear('sinus')
-  pick('adjacent_pathology','Adjacent teeth',opts('ADJ',[('NONE','No pathology identified',''),('REVIEW','Pathology requires review','')],prefix='SUR'))
-  pick('horizontal_defect','Horizontal bone deficiency',opts('HDEF',[('NONE','None apparent',''),('PRESENT','Present / suspected','')],prefix='SUR'))
-  pick('vertical_defect','Vertical bone deficiency',opts('VDEF',[('NONE','None apparent',''),('PRESENT','Present / suspected','')],prefix='SUR'))
-  pick('facial_defect','Facial defect relative to prosthetic axis',opts('FACIAL',[('NONE','None anticipated',''),('DEHISCENCE','Potential dehiscence',''),('FENESTRATION','Potential fenestration','')],prefix='SUR'))
-  if r('facial_defect') in ('SUR-FACIAL-DEHISCENCE','SUR-FACIAL-FENESTRATION'):
-   pick('angulation','Angulated pathway',opts('ANGUL',[('FEASIBLE','Potentially feasible',''),('NOTAPPROPRIATE','Not prosthetically appropriate','')],prefix='SUR'))
-  else:clear('angulation')
+ st.caption('Three domains of the surgical assessment. All are relevant to planning and none depends on another: complete them in any order. CBCT measurements are interpreted relative to the prosthetically ideal implant position.')
+ c1,c2,c3=st.columns(3)
+ with c1:
+  with st.container(border=True):
+   st.markdown('<div class="col-title">Bone Availability &amp; Quality</div><div class="col-desc">Which bone do we have?</div>',unsafe_allow_html=True)
+   numeric('ridge_height','Residual bone height (mm)')
+   numeric('ridge_width','Ridge width (mm)')
+   st.caption('Informs: dimensions, macrogeometry and expectations of primary stability.')
+ with c2:
+  with st.container(border=True):
+   st.markdown('<div class="col-title">Anatomical Constraints &amp; Local Conditions</div><div class="col-desc">Which structures or conditions restrict the treatment?</div>',unsafe_allow_html=True)
+   numeric('md_bone','Mesiodistal space between adjacent roots (mm)')
+   numeric('supracrestal','Supracrestal tissue height (mm)',max_value=20)
+   numeric('mouth_opening','Maximal mouth opening (mm)',max_value=80,step=1.)
+   if is_maxillary():
+    pick('sinus','Sinus assessment',opts('SINUS',[('NONE','No evident disease',''),('POSSIBLE','Possible sinus pathology',''),('TREATED','Previously treated sinus condition','')],prefix='SUR'))
+   else:clear('sinus')
+   pick('adjacent_pathology','Adjacent teeth',opts('ADJ',[('NONE','No pathology identified',''),('REVIEW','Pathology requires review','')],prefix='SUR'))
+   st.caption('Informs: safety distances, necessary modifications and previous treatments.')
+ with c3:
+  with st.container(border=True):
+   st.markdown('<div class="col-title">3D Implant Position &amp; Bone Deficiency</div><div class="col-desc">Can the implant be placed correctly, with sufficient bone support?</div>',unsafe_allow_html=True)
+   pick('horizontal_defect','Horizontal bone deficiency',opts('HDEF',[('NONE','None apparent',''),('PRESENT','Present / suspected','')],prefix='SUR'))
+   pick('vertical_defect','Vertical bone deficiency',opts('VDEF',[('NONE','None apparent',''),('PRESENT','Present / suspected','')],prefix='SUR'))
+   pick('facial_defect','Facial defect relative to prosthetic axis',opts('FACIAL',[('NONE','None anticipated',''),('DEHISCENCE','Potential dehiscence',''),('FENESTRATION','Potential fenestration','')],prefix='SUR'))
+   if r('facial_defect') in ('SUR-FACIAL-DEHISCENCE','SUR-FACIAL-FENESTRATION'):
+    pick('angulation','Angulated pathway',opts('ANGUL',[('FEASIBLE','Potentially feasible',''),('NOTAPPROPRIATE','Not prosthetically appropriate','')],prefix='SUR'))
+   else:clear('angulation')
+   st.caption('Informs: direct placement, alternative positions, simultaneous GBR or staged GBR.')
  st.info('No implant is cleared based on height or width alone. Anatomy, safety distances and manufacturer dimensions require independent assessment.')
 
 elif step==4:
