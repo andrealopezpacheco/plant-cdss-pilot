@@ -126,7 +126,7 @@ st.markdown("""<style>
 
 MODULES = [
     'Patient Data & Priorities', 'Case Type & Site', 'Prosthetic Assessment',
-    'Surgical Feasibility', 'Implant Selection', 'Surgical Planning',
+    'Surgical Assessment', 'Implant Selection', 'Surgical Planning',
     'Restorative Planning', 'Maintenance Program'
 ]
 NEEDS = {
@@ -184,7 +184,7 @@ QUADRANTS = [
 FDI_UNI = {fdi:universal for _,teeth in QUADRANTS for fdi,universal in teeth}
 
 if 'record' not in st.session_state:
- st.session_state.record = {'needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':['16'],'site':'CASE-SITE-HEALED','esthetic':'No'}
+ st.session_state.record = {'needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':[],'site':'CASE-SITE-HEALED','esthetic':'No'}
 if 'step' not in st.session_state: st.session_state.step=0
 record=st.session_state.record
 record['age']=age_group(record.get('age_years'))  # derived before the sidebar renders
@@ -243,14 +243,18 @@ def patient_context():
  if labels: st.info('Patient priorities in this case: '+', '.join(labels)+'. Preferences guide comparison among clinically feasible options; they do not override anatomical and safety constraints.')
  else: st.info('Patient preferences are not yet recorded. Complete Step 1 to inform the comparisons.')
 
-def opts(var,rows):
+def opts(var,rows,prefix='PRO'):
  # rows: (key,label,description) -> {response code: (label, description)}
- return {f'PRO-{var}-{k}':(l,d) for k,l,d in rows}
+ return {f'{prefix}-{var}-{k}':(l,d) for k,l,d in rows}
 def pro_help(definition,options=None):
- txt=definition
- if options: txt+='\n\n'+'\n'.join(f'- **{l}**: {d}' for l,d in options.values())
- return txt
-def pick(name,label,var_opts,definition):
+ parts=[definition] if definition else []
+ if options and any(d for _,d in options.values()):parts.append('\n'.join(f'- **{l}**: {d}' for l,d in options.values() if d))
+ return '\n\n'.join(parts) or None
+def is_maxillary():
+ # Upper-jaw site: any selected maxillary tooth (FDI quadrants 1-2) or a maxillary edentulous arch.
+ if r('case_type')=='CASE-TYPE-EDENT':return r('arch')=='Maxilla'
+ return any(str(t)[:1] in ('1','2') for t in r('teeth',[]))
+def pick(name,label,var_opts,definition=None):
  # Single select with NO pre-selected answer: an unanswered item stays unknown (None), never a default finding.
  labels={c:l for c,(l,_) in var_opts.items()}
  return field(name,st.selectbox,label,default=None,options=list(labels),format_func=lambda c:labels[c],index=None,placeholder='Select…',help=pro_help(definition,var_opts))
@@ -271,7 +275,7 @@ def goto(step):
 with st.sidebar:
  # 1 · Patient name (large) + compact context
  if r('case_type')=='CASE-TYPE-EDENT':case_line='Edentulous · '+str(r('arch','Arch not selected'))
- else:case_line=CASE_TYPES.get(r('case_type'),'Case not set')+' · '+', '.join(r('teeth',[]))+' (FDI)'
+ else:case_line=CASE_TYPES.get(r('case_type'),'Case not set')+' · '+((', '.join(r('teeth',[]))+' (FDI)') if r('teeth',[]) else 'tooth not selected')
  st.markdown('<div class="side-head"><img class="side-avatar" src="'+AVATAR_URI+'" alt=""><div><div class="side-name">'+escape(r('name','') or 'Patient name not entered')+'</div>'
   '<div class="side-meta">'+escape(f"{int(r('age_years'))} years ({AGE_SHORT[r('age')]})" if r('age') else 'Age not recorded')+'<br>'+escape(case_line)+'</div></div></div>',unsafe_allow_html=True)
  # 2 · Patient priorities (most important first)
@@ -291,7 +295,7 @@ with st.sidebar:
   if st.button(MODULES[i],key=f'side_{i}',use_container_width=True,type='primary' if st.session_state.step==i else 'secondary'):goto(i)
  if st.button('Case Summary',use_container_width=True,type='primary' if st.session_state.step==8 else 'secondary'):goto(8)
  if st.button('Reset demo case',use_container_width=True):
-  st.session_state.record={'needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':['16'],'site':'CASE-SITE-HEALED','esthetic':'No'}
+  st.session_state.record={'needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':[],'site':'CASE-SITE-HEALED','esthetic':'No'}
   for k in list(st.session_state.keys()):
    if k.startswith('ui_'):del st.session_state[k]
   goto(0)
@@ -428,12 +432,16 @@ elif step==3:
   numeric('supracrestal','Supracrestal tissue height (mm)',max_value=20)
   numeric('mouth_opening','Maximal mouth opening (mm)',max_value=80,step=1.)
  with right:
-  choose('sinus','Sinus assessment',['Not assessed','No evident disease','Possible sinus pathology','Previously treated sinus condition'])
-  choose('adjacent_pathology','Adjacent teeth',['Not assessed','No pathology identified','Pathology requires review'])
-  choose('horizontal_defect','Horizontal bone deficiency',['Unknown','None apparent','Present / suspected'])
-  choose('vertical_defect','Vertical bone deficiency',['Unknown','None apparent','Present / suspected'])
-  choose('facial_defect','Facial defect relative to prosthetic axis',['Not assessed','None anticipated','Potential dehiscence','Potential fenestration'])
-  choose('angulation','Angulated pathway',['Unknown','Potentially feasible','Not prosthetically appropriate'])
+  if is_maxillary():
+   pick('sinus','Sinus assessment',opts('SINUS',[('NONE','No evident disease',''),('POSSIBLE','Possible sinus pathology',''),('TREATED','Previously treated sinus condition','')],prefix='SUR'))
+  else:clear('sinus')
+  pick('adjacent_pathology','Adjacent teeth',opts('ADJ',[('NONE','No pathology identified',''),('REVIEW','Pathology requires review','')],prefix='SUR'))
+  pick('horizontal_defect','Horizontal bone deficiency',opts('HDEF',[('NONE','None apparent',''),('PRESENT','Present / suspected','')],prefix='SUR'))
+  pick('vertical_defect','Vertical bone deficiency',opts('VDEF',[('NONE','None apparent',''),('PRESENT','Present / suspected','')],prefix='SUR'))
+  pick('facial_defect','Facial defect relative to prosthetic axis',opts('FACIAL',[('NONE','None anticipated',''),('DEHISCENCE','Potential dehiscence',''),('FENESTRATION','Potential fenestration','')],prefix='SUR'))
+  if r('facial_defect') in ('SUR-FACIAL-DEHISCENCE','SUR-FACIAL-FENESTRATION'):
+   pick('angulation','Angulated pathway',opts('ANGUL',[('FEASIBLE','Potentially feasible',''),('NOTAPPROPRIATE','Not prosthetically appropriate','')],prefix='SUR'))
+  else:clear('angulation')
  st.info('No implant is cleared based on height or width alone. Anatomy, safety distances and manufacturer dimensions require independent assessment.')
 
 elif step==4:
@@ -455,7 +463,7 @@ elif step==5:
  option('Option A · Short implant concept','May limit surgical intervention in carefully selected posterior sites.','Evaluate primary stability, implant dimensions, restorative load and long-term evidence.','No automatic clearance from nominal bone height.')
  option('Option B · Sinus augmentation + longer implant','May permit additional implant length where anatomically justified.','Compare treatment burden, healing timeline, sinus anatomy and morbidity.','Sinus disease and anatomical limitations require separate assessment.')
  option('Option C · Horizontal regeneration / adjusted axis','Allows comparison of prosthetically feasible site-development strategies.','Check graft need, emergence and restorative component compatibility.','An angled component cannot compensate for unsafe 3D implant positioning.')
- if r('sinus') in ('Possible sinus pathology','Previously treated sinus condition'):notice('Sinus finding needs appropriate evaluation before considering sinus intervention.')
+ if r('sinus') in ('SUR-SINUS-POSSIBLE','SUR-SINUS-TREATED'):notice('Sinus finding needs appropriate evaluation before considering sinus intervention.')
  choose('surgical_option','Surgical pathway to investigate',['Undecided','Short implant concept','Sinus augmentation concept','Horizontal augmentation / altered axis','Compare multiple options'])
  references(5)
 
@@ -491,7 +499,7 @@ else:
  st.write('**Age group:**',AGES.get(r('age'),'Not entered'))
  st.write('**Needs:**',', '.join(NEEDS.get(x,x) for x in r('needs',[])) or 'Not entered')
  st.write('**Case:**',CASE_TYPES.get(r('case_type')))
- st.write('**Teeth (FDI):**',', '.join(r('teeth',[])) if r('case_type')!='CASE-TYPE-EDENT' else r('arch','Unknown'))
+ st.write('**Teeth (FDI):**',(', '.join(r('teeth',[])) or 'Not selected') if r('case_type')!='CASE-TYPE-EDENT' else r('arch','Unknown'))
  st.write('**Esthetic concern:**',r('esthetic','Not entered'))
  st.write('**Current site:**',SITE.get(r('site'),'Not entered'))
  st.write('**Implant / surgical / restorative:**',r('implant_option','Undecided'),'·',r('surgical_option','Undecided'),'·',r('retention','Undecided'))
