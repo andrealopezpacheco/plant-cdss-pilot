@@ -254,6 +254,9 @@ def is_maxillary():
  # Upper-jaw site: any selected maxillary tooth (FDI quadrants 1-2) or a maxillary edentulous arch.
  if r('case_type')=='CASE-TYPE-EDENT':return r('arch')=='Maxilla'
  return any(str(t)[:1] in ('1','2') for t in r('teeth',[]))
+def is_mandibular():
+ if r('case_type')=='CASE-TYPE-EDENT':return r('arch')=='Mandible'
+ return any(str(t)[:1] in ('3','4') for t in r('teeth',[]))
 def pick(name,label,var_opts,definition=None):
  # Single select with NO pre-selected answer: an unanswered item stays unknown (None), never a default finding.
  labels={c:l for c,(l,_) in var_opts.items()}
@@ -361,6 +364,8 @@ elif step==1:
   st.write('**Selected teeth:** '+(', '.join(f'{FDI_UNI[fdi]} / {fdi}' for fdi in chosen) if chosen else 'None selected'))
   if case_type=='CASE-TYPE-SHORT':st.caption('Short Span allows up to three teeth. To select another, deselect one first.')
  choose('esthetic','Does this case involve an esthetic concern?',['No','Yes'])
+ pick('mouth_opening','Maximal mouth opening',opts('MOUTH',[('OPTIMAL','Optimal','Opening sufficient for surgical and restorative instrument access.'),('LIMITED','Limited','Opening that restricts access for surgical or restorative instrumentation (e.g., posterior sites, guided surgery).')],prefix='CASE'),'Assessment of whether the maximal mouth opening allows adequate access for the planned surgery and restoration.')
+ if r('mouth_opening')=='CASE-MOUTH-LIMITED':st.info('Limited mouth opening: evaluate access for surgical and restorative instruments and the feasibility of guided surgery.')
  choose('site','Current site condition',SITE)
  if r('site')=='CASE-SITE-EXTRACT':st.info('Tooth is still present. Evaluate extraction considerations and potential timing options later; Type 1 is not assumed.')
 
@@ -430,23 +435,38 @@ elif step==3:
    st.markdown('<div class="col-title">Bone Availability &amp; Quality</div><div class="col-desc">Which bone do we have?</div>',unsafe_allow_html=True)
    numeric('ridge_height','Residual bone height (mm)')
    numeric('ridge_width','Ridge width (mm)')
+   pick('bone_quality','Bone quality (density)',opts('BQ',[('D1','D1 · Dense cortical bone','Almost entirely dense cortical bone.'),('D2','D2 · Thick cortex, coarse trabeculae','Thick dense-to-porous cortical bone surrounding coarse trabecular bone.'),('D3','D3 · Thin cortex, fine trabeculae','Thin porous cortical bone surrounding fine trabecular bone.'),('D4','D4 · Fine trabeculae, minimal cortex','Fine trabecular bone with almost no cortical layer.')],prefix='SUR'),'Bone density class (Misch), estimated from CBCT and/or tactile feedback during osteotomy. Informs implant macrogeometry, drilling protocol and expectations of primary stability.')
    st.caption('Informs: dimensions, macrogeometry and expectations of primary stability.')
  with c2:
   with st.container(border=True):
    st.markdown('<div class="col-title">Anatomical Constraints &amp; Local Conditions</div><div class="col-desc">Which structures or conditions restrict the treatment?</div>',unsafe_allow_html=True)
    numeric('md_bone','Mesiodistal space between adjacent roots (mm)')
    numeric('supracrestal','Supracrestal tissue height (mm)',max_value=20)
-   numeric('mouth_opening','Maximal mouth opening (mm)',max_value=80,step=1.)
    if is_maxillary():
     pick('sinus','Sinus assessment',opts('SINUS',[('NONE','No evident disease',''),('POSSIBLE','Possible sinus pathology',''),('TREATED','Previously treated sinus condition','')],prefix='SUR'))
-   else:clear('sinus')
+   else:clear('sinus');st.caption('Sinus assessment appears for maxillary sites (select the tooth or arch in Case Type & Site).')
    pick('adjacent_pathology','Adjacent teeth',opts('ADJ',[('NONE','No pathology identified',''),('REVIEW','Pathology requires review','')],prefix='SUR'))
+   pick('adjacent_infection','Infection in adjacent teeth',opts('ADJINF',[('NONE','None identified',''),('PRESENT','Infection present','')],prefix='SUR'),'Clinical or radiographic signs of active infection (e.g., periapical or periodontal) in the teeth adjacent to the site.')
+   if r('adjacent_infection')=='SUR-ADJINF-PRESENT':notice('Infection present in adjacent teeth: it is recommended to treat it before implant placement.')
+   pick('adjacent_roots','Adjacent root morphology',opts('ROOTS',[('NONE','No relevant alteration',''),('CONVERGENT','Convergent roots','Roots converging toward the site, reducing the interradicular space apically.'),('DILACERATED','Dilacerated roots','Roots with abnormal curvature or angulation.')],prefix='SUR'),'Morphology of the roots of the teeth adjacent to the site, assessed on CBCT.')
+   if r('adjacent_roots') in ('SUR-ROOTS-CONVERGENT','SUR-ROOTS-DILACERATED'):notice('Root morphology can limit the interradicular space and may alter the axial position of the implant; confirm safe distances on CBCT.')
+   if is_maxillary() or is_mandibular():
+    sopts=[]
+    if is_maxillary():sopts+=[('NASAL','Nasal floor','Limits the available vertical bone height at anterior maxillary sites.'),('INCISIVE','Incisive (nasopalatine) canal','Can limit the available width and displace the implant position or axis.')]
+    if is_mandibular():sopts+=[('IAN','Inferior alveolar canal','Limits the available vertical bone height; a safety distance is required.'),('MENTAL','Mental foramen','Limits the implant position and angulation in the premolar region.'),('LINGUAL','Lingual concavity (submandibular fossa)','May alter the axial inclination and increases the risk of lingual cortical perforation.')]
+    sopts.append(('NONE','None relevant','No relevant anatomical structure identified near the site.'))
+    valid=[f'SUR-STRUCT-{k}' for k,_,_ in sopts]
+    record['anat_structures']=[c for c in (r('anat_structures',[]) or []) if c in valid]
+    if any(c not in valid for c in (st.session_state.get('ui_anat_structures') or [])):st.session_state.pop('ui_anat_structures',None)
+    pickmulti('anat_structures','Anatomical structures near the site',opts('STRUCT',sopts,prefix='SUR'),'Anatomical structures identified on CBCT that can alter the three-dimensional or axial implant position.',none_code='SUR-STRUCT-NONE')
+    if any(c!='SUR-STRUCT-NONE' for c in (r('anat_structures',[]) or [])):st.info('Anatomical structures near the site can alter the three-dimensional and axial implant position; confirm safety distances on CBCT.')
+   else:clear('anat_structures',to='list')
    st.caption('Informs: safety distances, necessary modifications and previous treatments.')
  with c3:
   with st.container(border=True):
    st.markdown('<div class="col-title">3D Implant Position &amp; Bone Deficiency</div><div class="col-desc">Can the implant be placed correctly, with sufficient bone support?</div>',unsafe_allow_html=True)
-   pick('horizontal_defect','Horizontal bone deficiency',opts('HDEF',[('NONE','None apparent',''),('PRESENT','Present / suspected','')],prefix='SUR'))
-   pick('vertical_defect','Vertical bone deficiency',opts('VDEF',[('NONE','None apparent',''),('PRESENT','Present / suspected','')],prefix='SUR'))
+   pick('horizontal_defect','Horizontal bone deficiency',opts('HDEF',[('NONE','None apparent',''),('PRESENT','Present',''),('SUSPECTED','Suspected','')],prefix='SUR'))
+   pick('vertical_defect','Vertical bone deficiency',opts('VDEF',[('NONE','None apparent',''),('PRESENT','Present',''),('SUSPECTED','Suspected','')],prefix='SUR'))
    pick('facial_defect','Facial defect relative to prosthetic axis',opts('FACIAL',[('NONE','None anticipated',''),('DEHISCENCE','Potential dehiscence',''),('FENESTRATION','Potential fenestration','')],prefix='SUR'))
    if r('facial_defect') in ('SUR-FACIAL-DEHISCENCE','SUR-FACIAL-FENESTRATION'):
     pick('angulation','Angulated pathway',opts('ANGUL',[('FEASIBLE','Potentially feasible',''),('NOTAPPROPRIATE','Not prosthetically appropriate','')],prefix='SUR'))
