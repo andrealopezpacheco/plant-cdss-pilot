@@ -116,6 +116,7 @@ st.markdown("""<style>
 .side-meta {font-size:.86rem;color:#536576;line-height:1.55}
 .side-head {display:flex;align-items:center;gap:14px;margin:2px 0 4px}
 .side-avatar {width:58px;height:58px;flex:none}
+[data-testid="stSidebar"] .pill-top {background:#EC5A53 !important;color:#FFFFFF !important;font-weight:700}
 .prio-item {padding:4px 0;color:#273246;font-size:.95rem;line-height:1.35}
 .prio-top {font-weight:800}
 .side-nav {margin:18px 0 6px}
@@ -286,7 +287,7 @@ with st.sidebar:
  top=r('top_priority')
  ordered=([top] if top in needs else [])+[n for n in needs if n!=top]
  if ordered:
-  items=''.join('<div class="prio-item'+(' prio-top' if i==0 and top in needs else '')+'">• '+escape(NEEDS[n])+('  <span class="pill">Top priority</span>' if i==0 and top in needs else '')+'</div>' for i,n in enumerate(ordered))
+  items=''.join('<div class="prio-item'+(' prio-top' if i==0 and top in needs else '')+'">• '+escape(NEEDS[n])+('  <span class="pill pill-top">Top priority</span>' if i==0 and top in needs else '')+'</div>' for i,n in enumerate(ordered))
  else:items='<div class="small-muted">No priorities selected yet</div>'
  st.markdown('<div class="priority-panel"><div class="section-label">Patient priorities</div>'+items+'</div>',unsafe_allow_html=True)
  # 3 · Treatment sequence and recommendations
