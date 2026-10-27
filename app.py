@@ -440,7 +440,7 @@ elif step==3:
    st.caption('Informs: dimensions, macrogeometry and expectations of primary stability.')
  with c2:
   with st.container(border=True):
-   st.markdown('<div class="col-title">Anatomical Constraints &amp; Local Conditions</div><div class="col-desc">Which structures or conditions restrict the treatment?</div>',unsafe_allow_html=True)
+   st.markdown('<div class="col-title">Anatomical &amp; Local Constraints</div><div class="col-desc">Which structures or conditions restrict the treatment?</div>',unsafe_allow_html=True)
    numeric('md_bone','Mesiodistal space between adjacent roots (mm)')
    numeric('supracrestal','Supracrestal tissue height (mm)',max_value=20)
    if is_maxillary():
@@ -464,7 +464,7 @@ elif step==3:
    st.caption('Informs: safety distances, necessary modifications and previous treatments.')
  with c3:
   with st.container(border=True):
-   st.markdown('<div class="col-title">3D Implant Position &amp; Bone Deficiency</div><div class="col-desc">Can the implant be placed correctly, with sufficient bone support?</div>',unsafe_allow_html=True)
+   st.markdown('<div class="col-title">Bone Deficiencies &amp; Surgical Considerations</div><div class="col-desc">Can the implant be placed correctly, with sufficient bone support?</div>',unsafe_allow_html=True)
    pick('horizontal_defect','Horizontal bone deficiency',opts('HDEF',[('NONE','None apparent',''),('PRESENT','Present',''),('SUSPECTED','Suspected','')],prefix='SUR'))
    pick('vertical_defect','Vertical bone deficiency',opts('VDEF',[('NONE','None apparent',''),('PRESENT','Present',''),('SUSPECTED','Suspected','')],prefix='SUR'))
    pick('facial_defect','Facial defect relative to prosthetic axis',opts('FACIAL',[('NONE','None anticipated',''),('DEHISCENCE','Potential dehiscence',''),('FENESTRATION','Potential fenestration','')],prefix='SUR'))
