@@ -222,8 +222,7 @@ def link(label,url):st.markdown('📖 ['+label+']('+url+')')
 def references(section):
  with st.expander('Evidence and manufacturer references · illustrative',expanded=False):
   if section==4:
-   link('Straumann BLX official catalogue','https://www.straumann.com/content/dam/media-center/straumann/en/documents/brochure/technical-information/450.006-en_low.pdf')
-   link('Straumann Standard Plus overview','https://www.straumann.com/en/dental-professionals/dental-implants/tissue-level-implant-line/standard-plus-implant.html')
+   st.markdown('- Straumann USA. iEXCEL: Four Implant Designs in a Single System (straumann.com/us, iEXCEL section).\n- Straumann. BLC, TLC, BLX and TLX: product pages and C/X design guidelines (straumann.com).\n- Straumann. Bone Level Tapered Implant, Technical Information, 702167 (straumann.com, PDF).\n- Thoma DS et al. EAO Consensus Conference 2021: Soft tissue management at implants. Clin Oral Implants Res. 2021.')
   elif section==5:
    link('Thoma et al., 2024 · 10-year RCT, 6-mm vs longer implants with sinus elevation','https://doi.org/10.1111/jcpe.13954')
    link('Yan et al., 2019 · Short implants vs sinus elevation','https://bmjopen.bmj.com/content/9/10/e029826')
@@ -231,6 +230,74 @@ def references(section):
    link('Straumann Variobase for Crown AS information','https://www.straumann.com/content/dam/media-center/straumann/en/documents/brochure/product-information/490.288-en_low.pdf')
   else:
    st.caption('Future work: add site-specific maintenance evidence and patient-level risk stratification before validation.')
+
+FAMILIES={'IMP-FAM-BLT':'BLT · Bone Level Tapered','IMP-FAM-BLC':'BLC · Bone Level C','IMP-FAM-BLX':'BLX · Bone Level X','IMP-FAM-TLC':'TLC · Tissue Level C','IMP-FAM-TLX':'TLX · Tissue Level X'}
+# (macrogeometry and connection, clinical strength, especially reasonable when, main precaution)
+PROFILES={
+ 'IMP-FAM-BLT':('Apically tapered body; CrossFit SC (2.9), NC (3.3), RC (4.1/4.8).','Controlled compression of an underprepared bed; stability in soft bone and fresh sockets; Ø2.9 for reduced indications.','Bone Level with limited anatomy; immediate socket; family alternative for narrow anterior teeth with Ø2.9.','Do not extrapolate Ø2.9 indications to molars; review anatomy, loads and SC/NC/RC components.'),
+ 'IMP-FAM-BLC':('Tapered, fine apex, extended cutting grooves and double-thread; TorcFit.','Efficient insertion and stability with an adjustable cortical preparation; suitable for limited anatomies.','Bone Level in healed ridges, esthetic zones, planned CTG/GBR, or narrow apical anatomy.','Do not assume every C is "low stability": drilling and stability depend on the bed.'),
+ 'IMP-FAM-BLX':('Fully tapered, progressive thread and bidirectional cutting elements; TorcFit.','Dynamic Bone Management and high primary stability oriented to immediate protocols.','Bone Level with immediate insertion, possible immediate provisionalization/loading and/or need for stability in trabecular bone.','In dense cortical bone, control drilling, torque and compression; stability is not an automatic indication for immediate loading.'),
+ 'IMP-FAM-TLC':('Apical C taper with a machined transmucosal neck; TorcFit.','Tapered C plus a prosthetic interface away from the crest; transmucosal prosthetic access.','Healed ridge, adequate tissues and bone volume, with no planned need for CTG/GBR.','Confirm shoulder position, mucosal height, emergence profile and cleansability.'),
+ 'IMP-FAM-TLX':('Fully tapered X with a machined transmucosal neck; TorcFit.','X properties for primary stability on a Tissue Level platform.','Adequate tissues and volume without planned regeneration, with an immediate protocol considered and an adequate transmucosal position.','Do not select Tissue Level for torque alone; avoid an unfavorable neck if augmentation or complex esthetic management is needed.')}
+TIEBREAKERS=[
+ ('BLC vs BLX','BLC: you seek C versatility and cortical/spatial management at Bone Level, without a special priority on immediacy.','BLX: immediate protocol and especially demanding primary stability, if the drilling and the bone allow it.'),
+ ('BLC vs BLT','BLC: you need the iEXCEL/TorcFit ecosystem, the C design and the associated prosthodontic options.','BLT: the case favors CrossFit and its apical taper; Ø2.9 SC must be evaluated if applicable.'),
+ ('TLC vs TLX','TLC: stable, healed site, transmucosal approach and no particular need for X.','TLX: favorable Tissue Level conditions, but primary stability is more demanding or immediacy is considered.'),
+ ('Bone vs Tissue Level','Bone Level: CTG, GBR, compromised phenotype, esthetic management or complex depth/restoration.','Tissue Level: adequate bone and tissues; no planned regeneration; restorable transmucosal neck.')]
+SAFETY_NOTES=[
+ 'CTG is not a synonym of increasing the vertical supracrestal tissue height: record both goals and their measures independently.',
+ 'The X design can favor primary stability, but higher torque does not prove biological superiority nor authorize immediate loading by itself.',
+ 'Tissue Level is not universally contraindicated in augmented sites; excluding it when CTG/GBR is planned is a deliberate, conservative rule of this CDSS.',
+ 'For D1 to D4 density, do not infer an indication from CBCT HU alone: consider the clinical evaluation, the drilling protocol and scanner variability.',
+ 'The final recommendation requires the current IFU of the SKU, prosthetic compatibility, stability, anatomical analysis and clinical judgment.']
+REDUCED_HEIGHT_MM=8.0  # working threshold for "reduced posterior bone height"; to be confirmed
+SAFETY_MARGIN_MM=1.5   # bone to preserve around the implant (buccal, proximal, palatal/lingual)
+_DEH,_FEN='SUR-FACIAL-DEHISCENCE','SUR-FACIAL-FENESTRATION'
+_APICAL=('SUR-STRUCT-NASAL','SUR-STRUCT-INCISIVE','SUR-STRUCT-IAN','SUR-STRUCT-MENTAL','SUR-STRUCT-MANDINC','SUR-STRUCT-LINGFORAMEN','SUR-STRUCT-LINGUAL')
+
+def implant_level():
+ # Tissue rule: CTG, GBR or relevant deficits -> Bone Level; adequate tissues and no regeneration -> Tissue Level eligible.
+ reasons,missing=[],[]
+ for key,yes,lab in (('ctg_planned','IMP-CTG-YES','CTG decision'),('gbr_planned','IMP-GBR-YES','Simultaneous GBR decision')):
+  v=r(key)
+  if v==yes:reasons.append({'ctg_planned':'Connective tissue graft planned','gbr_planned':'Simultaneous GBR planned'}[key])
+  elif v is None:missing.append(lab)
+ fd=r('facial_defect')
+ if fd in (_DEH,_FEN):reasons.append('Potential facial dehiscence or fenestration')
+ elif fd is None:missing.append('Facial defect (Surgical Assessment)')
+ for key,bad,lab in (('horizontal_defect',('SUR-HDEF-PRESENT','SUR-HDEF-SUSPECTED'),'Horizontal bone deficiency'),('vertical_defect',('SUR-VDEF-PRESENT','SUR-VDEF-SUSPECTED'),'Vertical bone deficiency')):
+  v=r(key)
+  if v in bad:reasons.append(lab+' present or suspected')
+  elif v is None:missing.append(lab+' (Surgical Assessment)')
+ if reasons:return 'BL',reasons,missing
+ return (None if missing else 'TL'),reasons,missing
+
+def implant_scenarios():
+ u=(r('teeth',[]) or [''])[0][-1:]
+ anterior,posterior,incisor=bool(u) and u in '123',bool(u) and u in '45678',bool(u) and u in '12'
+ site,bq=r('site'),r('bone_quality')
+ imm_pl,imm_ld=r('immediate_placement'),r('immediate_loading')
+ ctg,gbr=r('ctg_planned'),r('gbr_planned')
+ defect=r('facial_defect') in (_DEH,_FEN)
+ apical=r('adjacent_roots')=='SUR-ROOTS-DILACERATED' or any(c in (r('anat_structures',[]) or []) for c in _APICAL)
+ level,_,_=implant_level()
+ S=[
+ ('BL',anterior and r('esthetic')=='Yes' and ctg=='IMP-CTG-YES','Anterior esthetic site; CTG for contour or thickness','BLC','BLT / BLX','Bone Level allows planning emergence and augmentation; C has a thin apex for limited anatomy.','Do not equate CTG with a vertical STH increase; evaluate the buccal plate, platform and profile.'),
+ ('BL',imm_pl=='IMP-IMMPL-YES' and imm_ld=='IMP-IMMLD-NO','Immediate post-extraction placement; conventional loading','BLT or BLC','BLX','Taper adapts to the socket bed; BLX if greater stability is required.','Assess the buccal wall, gap, 3D position, esthetic risk and dehiscences. Sufficient apical/palatal anchorage is not captured in the app: confirm clinically.'),
+ ('BL',imm_pl=='IMP-IMMPL-YES' and imm_ld=='IMP-IMMLD-YES','Immediate placement with immediate provisionalization or loading','BLX','BLC / BLT if they meet the criteria','X is designed to favor primary stability and immediate protocols.','Load only after verifying torque/ISQ according to a validated protocol, absence of micromovement and occlusal control.'),
+ ('BL',site=='CASE-SITE-HEALED' and bq=='SUR-BQ-D4','Healed ridge with low-density trabecular bone (D4)','BLX or BLT','BLC','Conical design and an adapted preparation provide greater stability capacity.','Do not impose generic underpreparation: follow the density protocol and control torque.'),
+ ('BL',bq in ('SUR-BQ-D1','SUR-BQ-D2'),'Dense bone / thick cortex (D1 to D2)','BLC or BLT with an adequate preparation','BLX with an adapted sequence','The choice must control cortical compression, not maximize torque.','Avoid overcompression; use a specific drilling/thread protocol and control heat.'),
+ ('BL',apical,'Restricted apical anatomy (dilacerated roots or nearby anatomical structures)','BLC or BLT','BLX if it allows orientation','The thin C apex and the BLT apical taper favor selective anatomical evaluation.','Confirm distances to roots, cortex and anatomical structures.'),
+ ('BL',incisor and 'PRO-SPACELIM-RED_MD' in (r('pro_space_lim',[]) or []),'Narrow mesiodistal space (selected incisors)','BLT Ø2.9 SC','BLC Ø3.3 if the anatomy allows','Ø2.9 has specific indications for narrow incisors; it is not a universal space solution.','Validate the mesiodistal distance, restorative diameter and forces; check the IFU exclusions.'),
+ ('BL',defect and gbr=='IMP-GBR-YES','Buccal defect / dehiscence with simultaneous GBR','BLC / BLT','BLX if additional stability is required','Bone Level is prioritized for regeneration management and 3D position.','Assess the severity of the defect and the need for a staged approach.'),
+ ('TL',posterior and site=='CASE-SITE-HEALED' and imm_ld=='IMP-IMMLD-NO' and level=='TL','Healed posterior site; adequate STH, gingiva and bone; no GBR','TLC','TLX','Transmucosal Tissue Level when the shoulder position is prosthetically favorable.','Ensure hygiene access, emergence, restorability and phenotype.'),
+ ('TL',posterior and imm_ld=='IMP-IMMLD-YES' and level=='TL','Posterior site with adequate tissues; immediate loading under evaluation','TLX','BLX if Tissue Level is not suitable','X favors stability; TLX keeps the transmucosal prosthetic connection.','Do not prioritize TLX if the tissue anatomy requires CTG/GBR.')]
+ return [dict(lvl=a,name=c,first=d,alts=e,why=f,flt=g) for a,b,c,d,e,f,g in S if b]
+
+def reduced_height():
+ u=(r('teeth',[]) or [''])[0][-1:]
+ h=r('ridge_height')
+ return bool(u) and u in '45678' and (r('vertical_defect') in ('SUR-VDEF-PRESENT','SUR-VDEF-SUSPECTED') or (h is not None and h<REDUCED_HEIGHT_MM))
 
 def option(title,benefit,caution,safety=None):
  with st.container(border=True):
@@ -471,17 +538,105 @@ elif step==3:
  st.info('No implant is cleared based on height or width alone. Anatomy, safety distances and manufacturer dimensions require independent assessment.')
 
 elif step==4:
- st.markdown('### Implant configuration · candidate concepts')
+ st.markdown('### Implant selection · design-based proposal')
  patient_context()
  if r('case_type')!='CASE-TYPE-SINGLE':notice('This demonstration evaluates a single restoration only; selected case type requires a future pathway.')
- left,right=st.columns(2)
- with left:option('Option A · Tissue-level candidate','Restorative interface can be supracrestal with an appropriate collar and soft-tissue architecture.','Check restorative space, collar position, esthetic concerns and current product dimensions.','Do not assume a specific 6-mm tissue-level product is available.')
- with right:option('Option B · Bone-level candidate','Flexible transmucosal design and restorative abutment choices where compatible.','Check abutment height, depth and emergence profile.','Implant length, diameter and components must be checked in a current Straumann catalogue.')
- st.caption('Illustrative candidate families: Straumann Standard Plus (tissue-level) and Straumann BLX (bone-level).')
- if r('ridge_height') is None:notice('Bone height not entered; length cannot be evaluated.')
- elif r('ridge_height')<8:st.info('Limited vertical height: evaluate short implant versus other treatment pathways; no automatic recommendation.')
- choose('implant_option','Candidate implant pathway to investigate',['Undecided','Tissue-level candidate','Bone-level candidate','Compare both'])
- references(4)
+ elif not r('teeth') or r('site') is None:st.info('Select the tooth and the current site condition in Case Type & Site to generate a proposal.')
+ else:
+  YN=lambda v:opts(v,[('YES','Yes',''),('NO','No','')],prefix='IMP')
+  with st.container(border=True):
+   st.markdown('<div class="col-title">Planning decisions that guide the family</div><div class="col-desc">Not captured in the earlier modules. Leave a question unanswered if it is still undecided.</div>',unsafe_allow_html=True)
+   ca,cb=st.columns(2)
+   with ca:
+    pick('ctg_planned','Connective tissue graft (CTG) planned?',YN('CTG'),'CTG for contour or thickness. It is not the same as increasing the vertical supracrestal tissue height: record both goals and their measures separately.')
+    if r('ctg_planned') is None and (r('pro_ridge')=='PRO-RIDGE-DEFICIENT' or r('pro_margin')=='PRO-MARGIN-APICAL'):st.caption('The prosthetic assessment suggests that soft-tissue augmentation may be needed.')
+    if r('site')=='CASE-SITE-EXTRACT':pick('immediate_placement','Immediate placement at extraction?',YN('IMMPL'),'Placement in the extraction socket at the time of extraction (ITI Type 1).')
+    else:clear('immediate_placement')
+   with cb:
+    pick('gbr_planned','Simultaneous GBR planned?',YN('GBR'),'Guided bone regeneration performed at the time of implant placement.')
+    pick('immediate_loading','Immediate provisionalization or loading proposed?',YN('IMMLD'),'Loading only after verifying torque/ISQ according to a validated protocol, absence of micromovement and occlusal control.')
+  level,reasons,missing=implant_level()
+  matched=implant_scenarios()
+  # --- tissue rule
+  with st.container(border=True):
+   if level=='BL':
+    st.markdown('#### Tissue rule · Bone Level prioritized')
+    st.write('✅ Reasons: '+', '.join(reasons)+'. Bone Level offers more flexibility to manage emergence, depth and peri-implant tissue during augmentation.')
+    st.write('⚠️ Specify the CTG goal (thickness or volume); do not assume a vertical STH increase. With GBR, confirm primary stability and closure and reassess staged versus simultaneous.')
+   elif level=='TL':
+    st.markdown('#### Tissue rule · Tissue Level eligible (TLC or TLX)')
+    st.write('✅ Bone and tissues are adequate and no regeneration is planned: transmucosal approach with the prosthetic connection away from the bone, if the position is restorable.')
+    st.write('⚠️ Validate cleansability, esthetics, shoulder level and vertical space. Bone Level remains valid when the prosthetic objectives favor it.')
+    st.write('‼️ Excluding Tissue Level when CTG/GBR is planned is a deliberate, conservative rule of this CDSS, not a universal contraindication.')
+   else:
+    st.markdown('#### Tissue rule · Not enough information yet')
+    st.write('⚠️ Tissue Level can be evaluated only after these are answered: '+', '.join(missing)+'. Meanwhile Bone Level candidates are shown as provisional.')
+  # --- main proposal
+  pool=[m for m in matched if m['lvl']==('TL' if level=='TL' else 'BL')]
+  narrow=[m for m in matched if m['name'].startswith('Narrow mesiodistal')]
+  if narrow:main=narrow[0]   # explicit narrow-space constraint: the Ø2.9 option exists only in BLT
+  elif pool:main=pool[0]
+  elif level=='TL':
+   immediacy=r('immediate_placement')=='IMP-IMMPL-YES' or r('immediate_loading')=='IMP-IMMLD-YES'
+   flt='Confirm shoulder position, mucosal height, emergence profile and cleansability.'
+   if r('esthetic')=='Yes':flt+=' Esthetic concern recorded: confirm that the transmucosal neck and the shoulder position are favorable; Bone Level remains valid.'
+   if r('site')!='CASE-SITE-HEALED':flt+=' TLC is described for healed ridges: confirm it for this site condition and timing.'
+   main=dict(name='No specific scenario matched',first='TLX' if immediacy else 'TLC',alts=('TLC' if immediacy else 'TLX')+'; Bone Level families if the prosthetic objectives favor them',why='Tissue Level is eligible: '+('TLX when primary stability or immediacy is more demanding.' if immediacy else 'TLC for a stable, healed site with no particular need for X.'),flt=flt)
+  else:main=dict(name='No specific scenario matched',first='BLC, BLT or BLX',alts='Choose with the tie-breakers below',why='All Bone Level families are valid candidates; differentiate them by primary-stability needs, bed type and loading protocol.',flt='Confirm anatomy, restorative platform and component availability.')
+  with st.container(border=True):
+   st.markdown('#### Main proposal · '+main['first']+('  (provisional)' if level is None else ''))
+   st.caption('Scenario: '+main['name'])
+   st.write('**Alternatives:** '+main['alts'])
+   st.write('✅ '+main['why'])
+   st.write('⚠️ '+main['flt'])
+  others=[m for m in matched if m is not main]
+  if others:
+   st.markdown('**Other scenarios that also apply**')
+   for m in others:
+    with st.container(border=True):
+     st.markdown('#### '+m['first'])
+     st.caption('Scenario: '+m['name']+' · '+('Bone Level' if m['lvl']=='BL' else 'Tissue Level'))
+     st.write('**Alternatives:** '+m['alts'])
+     st.write('✅ '+m['why'])
+     st.write('⚠️ '+m['flt'])
+  if reduced_height():
+   with st.container(border=True):
+    st.markdown('#### Reduced posterior bone height · evaluate alternatives and the real available length')
+    st.write('✅ Short BLX/TLX if indicated, or bone augmentation. The availability of short implants does not replace the biomechanical analysis.')
+    st.write('‼️ Do not automatically recommend 4–6 mm without verifying the USA SKU, the indication, the support and the risks.')
+  # --- size filters (diameter and length tables pending)
+  w,md=r('ridge_width'),r('md_bone')
+  limits=[(lab,v-2*SAFETY_MARGIN_MM) for lab,v in (('ridge width',w),('mesiodistal bone space',md)) if v is not None]
+  with st.container(border=True):
+   st.markdown('#### Size filters')
+   if limits:
+    for lab,mx in limits:st.write(f'• Maximum diameter by {lab}, keeping {SAFETY_MARGIN_MM:g} mm of bone on each side: **{max(mx,0):.1f} mm**')
+    if any(mx<=0 for _,mx in limits):notice('The measured space leaves no room for an implant with the safety margin; review the plan.')
+   else:st.caption('Enter ridge width and the mesiodistal bone space in Surgical Assessment to apply the safety margin.')
+   st.caption('Diameter and length will be filtered by the real Straumann USA SKU combinations (table pending), then by prosthetic platform and component availability.')
+  # --- missing data
+  gaps=list(missing)
+  if r('site')=='CASE-SITE-EXTRACT' and r('immediate_placement') is None:gaps.append('Immediate placement decision')
+  if r('immediate_loading') is None:gaps.append('Loading plan')
+  if r('bone_quality') is None:gaps.append('Bone quality D1 to D4 (Surgical Assessment)')
+  gaps=list(dict.fromkeys(gaps))
+  if gaps:st.info('Missing data that would refine this proposal: '+', '.join(gaps)+'.')
+  st.caption('Not captured by the app yet: mucosal thickness, keratinized tissue band and apical/palatal anchorage for immediate placement.')
+  st.caption('"Preferred" means a design recommendation of this CDSS, not an exclusive manufacturer indication. The final choice requires the current IFU of the SKU, prosthetic compatibility, stability, anatomical analysis and clinical judgment.')
+  with st.expander('Tie-breakers between designs',expanded=False):
+   for cmp_,a_,b_ in TIEBREAKERS:st.markdown(f'**{cmp_}**\n\n- {a_}\n- {b_}')
+  with st.expander('Design profile of each family',expanded=False):
+   for code,fam in FAMILIES.items():
+    macro,strength,when,caution=PROFILES[code]
+    st.markdown(f'**{fam}**\n\n- Macrogeometry and connection: {macro}\n- Clinical strength: {strength}\n- Especially reasonable when: {when}\n- Main precaution: {caution}')
+   st.caption('iEXCEL shares the internal TorcFit connection, but components are selected by platform and Bone/Tissue Level version. BLT uses CrossFit and does NOT share that prosthetic ecosystem.')
+  with st.expander('Safety controls and interpretive limits',expanded=False):
+   for t in SAFETY_NOTES:st.markdown('- '+t)
+  with st.container(border=True):
+   st.markdown('#### Clinician decision')
+   field('implant_family',st.selectbox,'Implant family selected by the clinician',default=None,options=list(FAMILIES),format_func=lambda c:FAMILIES[c],index=None,placeholder='Select…',help='The proposal does not decide for the clinician. The selected family is carried to the summary.')
+   field('implant_reason',st.text_area,'Reason for the choice (optional)',default='')
+  references(4)
 
 elif step==5:
  st.markdown('### Surgical pathways · patient-centered comparison')
@@ -528,7 +683,7 @@ else:
  st.write('**Teeth (FDI):**',(', '.join(r('teeth',[])) or 'Not selected') if r('case_type')!='CASE-TYPE-EDENT' else r('arch','Unknown'))
  st.write('**Esthetic concern:**',r('esthetic','Not entered'))
  st.write('**Current site:**',SITE.get(r('site'),'Not entered'))
- st.write('**Implant / surgical / restorative:**',r('implant_option','Undecided'),'·',r('surgical_option','Undecided'),'·',r('retention','Undecided'))
+ st.write('**Implant / surgical / restorative:**',FAMILIES.get(r('implant_family'),'Undecided'),'·',r('surgical_option','Undecided'),'·',r('retention','Undecided'))
  st.write('**Maintenance:**',r('maintenance_plan','Not assigned'))
  st.caption('The summary represents the current working plan, not a treatment prescription or an approved clinical recommendation.')
  # Structured codes allow downstream research and software iterations.
