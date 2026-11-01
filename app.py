@@ -185,7 +185,7 @@ QUADRANTS = [
 FDI_UNI = {fdi:universal for _,teeth in QUADRANTS for fdi,universal in teeth}
 
 if 'record' not in st.session_state:
- st.session_state.record = {'needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':[],'site':'CASE-SITE-HEALED','esthetic':'No'}
+ st.session_state.record = {'needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':[],'esthetic':'No'}
 if 'step' not in st.session_state: st.session_state.step=0
 record=st.session_state.record
 record['age']=age_group(record.get('age_years'))  # derived before the sidebar renders
@@ -299,13 +299,13 @@ with st.sidebar:
   if st.button(MODULES[i],key=f'side_{i}',use_container_width=True,type='primary' if st.session_state.step==i else 'secondary'):goto(i)
  if st.button('Case Summary',use_container_width=True,type='primary' if st.session_state.step==8 else 'secondary'):goto(8)
  if st.button('Reset demo case',use_container_width=True):
-  st.session_state.record={'needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':[],'site':'CASE-SITE-HEALED','esthetic':'No'}
+  st.session_state.record={'needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':[],'esthetic':'No'}
   for k in list(st.session_state.keys()):
    if k.startswith('ui_'):del st.session_state[k]
   goto(0)
 
 st.markdown('<div class="topline"></div>',unsafe_allow_html=True)
-st.markdown('<div class="hero"><div class="eyebrow">EVIDENCE-BASED · PATIENT-CENTERED · CLINICALLY DRIVEN</div><h1 style="margin:5px 0">Implant Planning Decision Explorer</h1><span class="pill">Independent research prototype</span> &nbsp; <span class="pill">Native odontogram · V7.1</span></div>',unsafe_allow_html=True)
+st.markdown('<div class="hero"><div class="eyebrow">EVIDENCE-BASED · PATIENT-CENTERED · CLINICALLY DRIVEN</div><h1 style="margin:5px 0">Implant Planning Decision Explorer</h1></div>',unsafe_allow_html=True)
 step=st.session_state.step
 if step<8:
  st.progress((step+1)/8,text=f'{step+1:02d} / 08 · {MODULES[step]}')
@@ -314,7 +314,7 @@ else:st.subheader('Case Summary · Shared Decision-Making')
 
 if step==0:
  st.caption('Module PAT: complete this first; values are reused in clinical proposals and the patient snapshot.')
- field('name',st.text_input,'Patient name / study pseudonym',default='',placeholder='Demo Patient 01')
+ field('name',st.text_input,'Patient name',default='',placeholder='Enter patient name')
  field('age_years',st.number_input,'Age (years)',default=None,value=None,min_value=0,max_value=110,step=1,placeholder='Enter age in years')
  if r('age'):st.caption('Age group (automatic): '+AGES[r('age')])
  st.caption(age_scale_text(r('age')))
@@ -332,7 +332,6 @@ if step==0:
  if r('age')=='PAT-AGE-O60P':st.info('Evaluate individual dexterity, medical status and maintenance needs; age alone is not a contraindication.')
 
 elif step==1:
- st.caption('Module CASE: current site condition, not a request to choose ITI implant placement timing.')
  case_type=choose('case_type','Case type',CASE_TYPES)
  if case_type=='CASE-TYPE-EDENT':
   choose('arch','Edentulous arch',['Maxilla','Mandible'])
@@ -367,7 +366,7 @@ elif step==1:
  choose('esthetic','Does this case involve an esthetic concern?',['No','Yes'])
  pick('mouth_opening','Maximal mouth opening',opts('MOUTH',[('OPTIMAL','Optimal','Opening sufficient for surgical and restorative instrument access.'),('LIMITED','Limited','Opening that restricts access for surgical or restorative instrumentation (e.g., posterior sites, guided surgery).')],prefix='CASE'),'Assessment of whether the maximal mouth opening allows adequate access for the planned surgery and restoration.')
  if r('mouth_opening')=='CASE-MOUTH-LIMITED':st.info('Limited mouth opening: evaluate access for surgical and restorative instruments and the feasibility of guided surgery.')
- choose('site','Current site condition',SITE)
+ field('site',st.selectbox,'Current site condition',default=None,options=list(SITE),format_func=lambda c:SITE[c],index=None,placeholder='Select…')
  if r('site')=='CASE-SITE-EXTRACT':st.info('Tooth is still present. Evaluate extraction considerations and potential timing options later; Type 1 is not assumed.')
 
 elif step==2:
@@ -381,7 +380,6 @@ elif step==2:
    numeric('pro_io','Interocclusal space (mm)',help='Vertical distance available between a reference point at the site and the opposing occlusal surface or plane, considering the planned vertical dimension of occlusion.')
    LIM=opts('SPACELIM',[('NONE','None','No space limitation identified.'),('RED_V','Reduced vertical space','Insufficient vertical space.'),('RED_MD','Reduced mesiodistal space','Insufficient mesiodistal space.'),('EXC_V','Excessive vertical space','Increased vertical space, which may require a different restorative design.'),('EXC_MD','Excessive mesiodistal space','Increased mesiodistal space, which may require a different restorative design.')])
    pickmulti('pro_space_lim','Restorative space limitation',LIM,'Clinical identification of dimensional limitations for executing the proposed restoration.',none_code='PRO-SPACELIM-NONE')
-   st.caption('Three-dimensional assessment of the prosthetic space is covered in ITI educational modules.')
  # ---------------- 2 · Restoration–Tissue Relationship ----------------
  with c2:
   with st.container(border=True):
@@ -403,7 +401,6 @@ elif step==2:
    PAP=lambda v:opts(v,[('PRESERVED','Preserved','Interproximal tissue adequately fills the intended space.'),('REDUCED','Reduced','Partial fill of the interproximal space.'),('ABSENT','Absent','No clinically identifiable papilla.'),('NA','Not applicable','Does not apply to this type of restoration.')])
    pick('pro_pap_m','Mesial papilla',PAP('PAPM'),'Degree to which mesial soft tissue fills the interproximal space relative to the planned cervical architecture.')
    pick('pro_pap_d','Distal papilla',PAP('PAPD'),'Degree to which distal soft tissue fills the interproximal space relative to the planned restorative architecture.')
-   st.caption('Integration of tissue volume, height and contour with the future restoration is based on implant esthetics and emergence-profile management principles.')
  # ---------------- 3 · Occlusal Assessment ----------------
  with c3:
   with st.container(border=True):
@@ -422,7 +419,6 @@ elif step==2:
    st.markdown('<div class="section-label sub-label">Parafunctional activity</div>',unsafe_allow_html=True)
    PARA=opts('PARA',[('NONE','None identified','No parafunctional activity identified with the available information.'),('SELF','Self-reported','Parafunctional activity reported by the patient.'),('SUSPECTED','Clinically suspected','Clinical suspicion based on the examination.'),('BOTH','Both','Both self-reported and clinically suspected.')])
    pick('pro_para','Parafunctional activity',PARA,'Reported or clinically suspected parafunctional mandibular muscle activity.')
-   st.caption('These variables describe the occlusal environment and anticipated loading; they should not be translated directly into a risk of failure. Evidence on optimal occlusal schemes for implants is limited.')
  # ---------------- preliminary prompts (not validated rules) ----------------
  if r('esthetic')=='Yes':st.info('Esthetic concern recorded. Evaluate provisionalization and soft-tissue architecture in restorative proposals.')
  if r('pro_ridge')=='PRO-RIDGE-DEFICIENT' or r('pro_margin')=='PRO-MARGIN-APICAL':st.info('Assess soft-tissue and/or volume augmentation options; timing and indication require evaluation.')
@@ -545,4 +541,3 @@ with left:
  if st.button('← Previous',disabled=step==0,use_container_width=True):goto(step-1)
 with right:
  if st.button('Next →' if step<8 else 'Restart navigation ↺',type='primary',use_container_width=True):goto(step+1 if step<8 else 0)
-st.caption('Research prototype; decision rules require evidence mapping, clinician review and validation. Not affiliated with ITI or Straumann.')
