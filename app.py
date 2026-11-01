@@ -269,6 +269,10 @@ def implant_level():
   v=r(key)
   if v in bad:reasons.append(lab+' present or suspected')
   elif v is None:missing.append(lab+' (Surgical Assessment)')
+ for key,bad,lab,txt in (('soft_thickness','SUR-STT-DEFICIENT','Soft-tissue thickness','Soft-tissue thickness deficient'),('keratinized','SUR-KT-DEFICIENT','Keratinized tissue','Keratinized tissue band under 2 mm')):
+  v=r(key)
+  if v==bad:reasons.append(txt)
+  elif v is None:missing.append(lab+' (Surgical Assessment)')
  if reasons:return 'BL',reasons,missing
  return (None if missing else 'TL'),reasons,missing
 
@@ -293,6 +297,48 @@ def implant_scenarios():
  ('TL',posterior and site=='CASE-SITE-HEALED' and imm_ld=='IMP-IMMLD-NO' and level=='TL','Healed posterior site; adequate STH, gingiva and bone; no GBR','TLC','TLX','Transmucosal Tissue Level when the shoulder position is prosthetically favorable.','Ensure hygiene access, emergence, restorability and phenotype.'),
  ('TL',posterior and imm_ld=='IMP-IMMLD-YES' and level=='TL','Posterior site with adequate tissues; immediate loading under evaluation','TLX','BLX if Tissue Level is not suitable','X favors stability; TLX keeps the transmucosal prosthetic connection.','Do not prioritize TLX if the tissue anatomy requires CTG/GBR.')]
  return [dict(lvl=a,name=c,first=d,alts=e,why=f,flt=g) for a,b,c,d,e,f,g in S if b]
+
+VERT_MARGIN_MM=2.0     # provisional vertical safety margin used for the length ceiling; to be confirmed
+BLT_DIAMETERS=(2.9,3.3,4.1,4.8)   # CrossFit SC, NC, RC (4.1 / 4.8) from the design matrix
+_FAMRE=r'(BLT|BLC|BLX|TLC|TLX)'
+
+def size_ceiling():
+ # (max diameter, max length) in mm from the entered measures; None when not entered.
+ w,md,h=r('ridge_width'),r('md_bone'),r('ridge_height')
+ ds=[v-2*SAFETY_MARGIN_MM for v in (w,md) if v is not None]
+ return (min(ds) if ds else None),(h-VERT_MARGIN_MM if h is not None else None)
+
+def soft_tissue_notes():
+ n=[]
+ if r('soft_thickness')=='SUR-STT-DEFICIENT':n.append('Soft-tissue thickness is deficient: plan a connective tissue graft (CTG) for thickness. Record this goal separately from any vertical STH change.')
+ if r('keratinized')=='SUR-KT-DEFICIENT':n.append('Keratinized band under 2 mm: plan keratinized tissue augmentation (for example a free gingival graft or an apically positioned flap), before, during or after placement.')
+ return n
+
+def implant_options(main):
+ # Two parallel options: the main proposal and its first valid alternative, each with type, provisional size ceiling and considerations.
+ import re
+ txt=main['first']+' ; '+main['alts']
+ fams=[]
+ for m in re.findall(_FAMRE,txt):
+  c='IMP-FAM-'+m
+  if c not in fams:fams.append(c)
+ fixed={'IMP-FAM-'+f:float(d) for f,d in re.findall(_FAMRE+r' Ø(\d\.\d)',txt)}
+ dmax,lmax=size_ceiling()
+ out=[]
+ for i,c in enumerate(fams[:2]):
+  macro,strength,when,caution=PROFILES[c]
+  if c in fixed:
+   d=fixed[c]
+   dia='Ø'+format(d,'.1f')+' mm'+(' · exceeds the measured space' if dmax is not None and d>dmax else '')
+  elif c=='IMP-FAM-BLT':
+   ok=[x for x in BLT_DIAMETERS if dmax is None or x<=dmax]
+   dia=('Ø '+' / '.join(format(x,'.1f') for x in ok)+' mm' if ok else 'No BLT diameter fits the measured space')
+  else:dia=('up to Ø'+format(max(dmax,0),'.1f')+' mm (exact diameters pending the SKU table)') if dmax is not None else 'Enter ridge width and mesiodistal space to filter'
+  length=('up to '+format(max(lmax,0),'.1f')+' mm (exact lengths pending the SKU table)') if lmax is not None else 'Enter ridge height to filter'
+  cons=[('✅',main['why'] if i==0 else strength),('⚠️',main['flt'] if i==0 else caution)]
+  if i==0 and main['flt']!=caution:cons.append(('⚠️',caution))
+  out.append(dict(code=c,role='Main proposal' if i==0 else 'Alternative',dia=dia,length=length,macro=macro,cons=cons,scenario=main['name'] if i==0 else None))
+ return out
 
 def reduced_height():
  u=(r('teeth',[]) or [''])[0][-1:]
@@ -534,7 +580,10 @@ elif step==3:
    if r('facial_defect') in ('SUR-FACIAL-DEHISCENCE','SUR-FACIAL-FENESTRATION'):
     pick('angulation','Angulated pathway',opts('ANGUL',[('FEASIBLE','Potentially feasible',''),('NOTAPPROPRIATE','Not prosthetically appropriate','')],prefix='SUR'))
    else:clear('angulation')
-   st.caption('Informs: direct placement, alternative positions, simultaneous GBR or staged GBR.')
+   st.markdown('<div class="section-label sub-label">Soft tissue</div>',unsafe_allow_html=True)
+   pick('soft_thickness','Soft-tissue thickness (volume)',opts('STT',[('ADEQUATE','Adequate',''),('DEFICIENT','Deficient','')],prefix='SUR'),'Quantity of peri-implant soft tissue (thickness/volume) at the site. A deficiency points to a connective tissue graft (CTG) to increase thickness; it is not the same as vertical supracrestal tissue height.')
+   pick('keratinized','Keratinized tissue band',opts('KT',[('ADEQUATE','Adequate (2 mm or more)',''),('DEFICIENT','Deficient (less than 2 mm)','')],prefix='SUR'),'Quality of the peri-implant soft tissue: a keratinized band under 2 mm is considered deficient and calls for keratinized tissue augmentation.')
+   st.caption('Informs: direct placement, alternative positions, GBR, soft-tissue augmentation and implant level.')
  st.info('No implant is cleared based on height or width alone. Anatomy, safety distances and manufacturer dimensions require independent assessment.')
 
 elif step==4:
@@ -549,7 +598,8 @@ elif step==4:
    ca,cb=st.columns(2)
    with ca:
     pick('ctg_planned','Connective tissue graft (CTG) planned?',YN('CTG'),'CTG for contour or thickness. It is not the same as increasing the vertical supracrestal tissue height: record both goals and their measures separately.')
-    if r('ctg_planned') is None and (r('pro_ridge')=='PRO-RIDGE-DEFICIENT' or r('pro_margin')=='PRO-MARGIN-APICAL'):st.caption('The prosthetic assessment suggests that soft-tissue augmentation may be needed.')
+    if r('ctg_planned')!='IMP-CTG-YES' and r('soft_thickness')=='SUR-STT-DEFICIENT':st.caption('Soft-tissue thickness was recorded as deficient: a CTG for thickness is suggested.')
+    elif r('ctg_planned') is None and (r('pro_ridge')=='PRO-RIDGE-DEFICIENT' or r('pro_margin')=='PRO-MARGIN-APICAL'):st.caption('The prosthetic assessment suggests that soft-tissue augmentation may be needed.')
     if r('site')=='CASE-SITE-EXTRACT':pick('immediate_placement','Immediate placement at extraction?',YN('IMMPL'),'Placement in the extraction socket at the time of extraction (ITI Type 1).')
     else:clear('immediate_placement')
    with cb:
@@ -576,6 +626,7 @@ elif step==4:
   narrow=[m for m in matched if m['name'].startswith('Narrow mesiodistal')]
   if narrow:main=narrow[0]   # explicit narrow-space constraint: the Ø2.9 option exists only in BLT
   elif pool:main=pool[0]
+  elif level=='TL' and matched:main=matched[0]   # no Tissue Level scenario fits (immediate placement, dense or soft bone, restricted apical anatomy): the matching Bone Level scenario leads
   elif level=='TL':
    immediacy=r('immediate_placement')=='IMP-IMMPL-YES' or r('immediate_loading')=='IMP-IMMLD-YES'
    flt='Confirm shoulder position, mucosal height, emergence profile and cleansability.'
@@ -583,20 +634,37 @@ elif step==4:
    if r('site')!='CASE-SITE-HEALED':flt+=' TLC is described for healed ridges: confirm it for this site condition and timing.'
    main=dict(name='No specific scenario matched',first='TLX' if immediacy else 'TLC',alts=('TLC' if immediacy else 'TLX')+'; Bone Level families if the prosthetic objectives favor them',why='Tissue Level is eligible: '+('TLX when primary stability or immediacy is more demanding.' if immediacy else 'TLC for a stable, healed site with no particular need for X.'),flt=flt)
   else:main=dict(name='No specific scenario matched',first='BLC, BLT or BLX',alts='Choose with the tie-breakers below',why='All Bone Level families are valid candidates; differentiate them by primary-stability needs, bed type and loading protocol.',flt='Confirm anatomy, restorative platform and component availability.')
-  with st.container(border=True):
-   st.markdown('#### Main proposal · '+main['first']+('  (provisional)' if level is None else ''))
-   st.caption('Scenario: '+main['name'])
-   st.write('**Alternatives:** '+main['alts'])
-   st.write('✅ '+main['why'])
-   st.write('⚠️ '+main['flt'])
+  options_=implant_options(main)
+  dmax_,lmax_=size_ceiling()
+  if dmax_ is not None and dmax_<=0:notice('The measured space leaves no room for an implant with the safety margin of '+format(SAFETY_MARGIN_MM,'g')+' mm; review the plan.')
+  st.markdown('#### Treatment options'+('  (provisional)' if level is None else ''))
+  st.caption('Scenario: '+main['name']+'. Sizes are ceilings computed from your measures with a '+format(SAFETY_MARGIN_MM,'g')+' mm bone margin; exact diameters and lengths will come from the Straumann USA SKU table.')
+  cols_=st.columns(len(options_)) if options_ else []
+  for col_,o_,tag_ in zip(cols_,options_,'AB'):
+   with col_:
+    with st.container(border=True):
+     st.markdown('<div class="col-title">Option '+tag_+' · '+FAMILIES[o_['code']]+'</div><div class="col-desc">'+o_['role']+'</div>',unsafe_allow_html=True)
+     st.write('**Implant type:** '+FAMILIES[o_['code']])
+     st.write('**Diameter:** '+o_['dia'])
+     st.write('**Length:** '+o_['length'])
+     st.write('**Design:** '+o_['macro'])
+  cols2_=st.columns(len(options_)) if options_ else []
+  for col_,o_,tag_ in zip(cols2_,options_,'AB'):
+   with col_:
+    with st.container(border=True):
+     st.markdown('**Considerations · Option '+tag_+'**')
+     for ic_,t_ in o_['cons']:st.write(ic_+' '+t_)
+  st_notes_=soft_tissue_notes()
+  if st_notes_:
+   with st.container(border=True):
+    st.markdown('**Soft-tissue plan (applies to both options)**')
+    for t_ in st_notes_:st.write('‼️ '+t_)
   others=[m for m in matched if m is not main]
   if others:
-   st.markdown('**Other scenarios that also apply**')
-   for m in others:
-    with st.container(border=True):
-     st.markdown('#### '+m['first'])
-     st.caption('Scenario: '+m['name']+' · '+('Bone Level' if m['lvl']=='BL' else 'Tissue Level'))
-     st.write('**Alternatives:** '+m['alts'])
+   with st.expander('Other scenarios that also apply',expanded=False):
+    for m in others:
+     st.markdown('**'+m['first']+'** · '+m['name']+' · '+('Bone Level' if m['lvl']=='BL' else 'Tissue Level'))
+     st.write('Alternatives: '+m['alts'])
      st.write('✅ '+m['why'])
      st.write('⚠️ '+m['flt'])
   if reduced_height():
@@ -604,16 +672,6 @@ elif step==4:
     st.markdown('#### Reduced posterior bone height · evaluate alternatives and the real available length')
     st.write('✅ Short BLX/TLX if indicated, or bone augmentation. The availability of short implants does not replace the biomechanical analysis.')
     st.write('‼️ Do not automatically recommend 4–6 mm without verifying the USA SKU, the indication, the support and the risks.')
-  # --- size filters (diameter and length tables pending)
-  w,md=r('ridge_width'),r('md_bone')
-  limits=[(lab,v-2*SAFETY_MARGIN_MM) for lab,v in (('ridge width',w),('mesiodistal bone space',md)) if v is not None]
-  with st.container(border=True):
-   st.markdown('#### Size filters')
-   if limits:
-    for lab,mx in limits:st.write(f'• Maximum diameter by {lab}, keeping {SAFETY_MARGIN_MM:g} mm of bone on each side: **{max(mx,0):.1f} mm**')
-    if any(mx<=0 for _,mx in limits):notice('The measured space leaves no room for an implant with the safety margin; review the plan.')
-   else:st.caption('Enter ridge width and the mesiodistal bone space in Surgical Assessment to apply the safety margin.')
-   st.caption('Diameter and length will be filtered by the real Straumann USA SKU combinations (table pending), then by prosthetic platform and component availability.')
   # --- missing data
   gaps=list(missing)
   if r('site')=='CASE-SITE-EXTRACT' and r('immediate_placement') is None:gaps.append('Immediate placement decision')
@@ -621,7 +679,7 @@ elif step==4:
   if r('bone_quality') is None:gaps.append('Bone quality D1 to D4 (Surgical Assessment)')
   gaps=list(dict.fromkeys(gaps))
   if gaps:st.info('Missing data that would refine this proposal: '+', '.join(gaps)+'.')
-  st.caption('Not captured by the app yet: mucosal thickness, keratinized tissue band and apical/palatal anchorage for immediate placement.')
+  st.caption('Not captured by the app yet: apical/palatal anchorage for immediate placement.')
   st.caption('"Preferred" means a design recommendation of this CDSS, not an exclusive manufacturer indication. The final choice requires the current IFU of the SKU, prosthetic compatibility, stability, anatomical analysis and clinical judgment.')
   with st.expander('Tie-breakers between designs',expanded=False):
    for cmp_,a_,b_ in TIEBREAKERS:st.markdown(f'**{cmp_}**\n\n- {a_}\n- {b_}')
@@ -634,7 +692,9 @@ elif step==4:
    for t in SAFETY_NOTES:st.markdown('- '+t)
   with st.container(border=True):
    st.markdown('#### Clinician decision')
-   field('implant_family',st.selectbox,'Implant family selected by the clinician',default=None,options=list(FAMILIES),format_func=lambda c:FAMILIES[c],index=None,placeholder='Select…',help='The proposal does not decide for the clinician. The selected family is carried to the summary.')
+   order_=[o_['code'] for o_ in options_]+[c for c in FAMILIES if c not in [o_['code'] for o_ in options_]]
+   tags_={o_['code']:'Option '+t_+' · ' for o_,t_ in zip(options_,'AB')}
+   field('implant_family',st.selectbox,'Option selected by the clinician',default=None,options=order_,format_func=lambda c:tags_.get(c,'Other · ')+FAMILIES[c],index=None,placeholder='Select…',help='The proposal does not decide for the clinician. The selected family is carried to the summary and the next modules.')
    field('implant_reason',st.text_area,'Reason for the choice (optional)',default='')
   references(4)
 
