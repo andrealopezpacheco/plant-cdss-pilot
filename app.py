@@ -222,7 +222,7 @@ def link(label,url):st.markdown('📖 ['+label+']('+url+')')
 def references(section):
  with st.expander('Evidence and manufacturer references · illustrative',expanded=False):
   if section==4:
-   st.markdown('- Straumann USA. iEXCEL: Four Implant Designs in a Single System (straumann.com/us, iEXCEL section).\n- Straumann. BLC, TLC, BLX and TLX: product pages and C/X design guidelines (straumann.com).\n- Straumann. Bone Level Tapered Implant, Technical Information, 702167 (straumann.com, PDF).\n- Thoma DS et al. EAO Consensus Conference 2021: Soft tissue management at implants. Clin Oral Implants Res. 2021.')
+   st.markdown('- Straumann USA. iEXCEL: Four Implant Designs in a Single System (straumann.com/us, iEXCEL section).\n- Straumann. BLC, TLC, BLX and TLX: product pages and C/X design guidelines (straumann.com).\n- Straumann. Bone Level Tapered Implant, Technical Information, 702167 (straumann.com, PDF).\n- Thoma DS et al. EAO Consensus Conference 2021: Soft tissue management at implants. Clin Oral Implants Res. 2021.\n- Yu SH, Saleh MHA, Wang HL. Simultaneous or staged lateral ridge augmentation: a clinical guideline on the decision-making process. Periodontol 2000. 2023;93(1):107-128.\n- Jung RE et al. A randomized controlled clinical trial comparing small buccal dehiscence defects around dental implants treated with guided bone regeneration or left for spontaneous healing. Clin Oral Implants Res. 2017;28(3):348-354.\n- ITI Consensus 2023: buccal bone thickness above 1.5 mm at healed ridges and simultaneous regeneration of buccal dehiscences (cited in the functional specification; full citation pending).')
   elif section==5:
    link('Thoma et al., 2024 · 10-year RCT, 6-mm vs longer implants with sinus elevation','https://doi.org/10.1111/jcpe.13954')
    link('Yan et al., 2019 · Short implants vs sinus elevation','https://bmjopen.bmj.com/content/9/10/e029826')
@@ -251,24 +251,35 @@ SAFETY_NOTES=[
  'For D1 to D4 density, do not infer an indication from CBCT HU alone: consider the clinical evaluation, the drilling protocol and scanner variability.',
  'The final recommendation requires the current IFU of the SKU, prosthetic compatibility, stability, anatomical analysis and clinical judgment.']
 REDUCED_HEIGHT_MM=8.0  # working threshold for "reduced posterior bone height"; to be confirmed
-SAFETY_MARGIN_MM=1.5   # bone to preserve around the implant (buccal, proximal, palatal/lingual)
+PROX_MM=1.5      # bone/space kept mesial and distal to the implant, from the adjacent roots
+BUCCAL_MM=1.5    # planned buccal bone thickness (ITI 2023: more than 1.5 mm)
+PALATAL_MM=1.0   # planned palatal/lingual bone thickness
 _DEH,_FEN='SUR-FACIAL-DEHISCENCE','SUR-FACIAL-FENESTRATION'
 _APICAL=('SUR-STRUCT-NASAL','SUR-STRUCT-INCISIVE','SUR-STRUCT-IAN','SUR-STRUCT-MENTAL','SUR-STRUCT-MANDINC','SUR-STRUCT-LINGFORAMEN','SUR-STRUCT-LINGUAL')
 
 def implant_level():
- # Tissue rule: CTG, GBR or relevant deficits -> Bone Level; adequate tissues and no regeneration -> Tissue Level eligible.
+ # Sequence: regenerative need -> timing (simultaneous or staged) -> tissue condition after re-evaluation -> Bone/Tissue Level.
+ # Returns (level, reasons, missing); level is 'BL', 'TL', 'DEFER' (staged GBR still to be done) or None (data missing).
  reasons,missing=[],[]
- for key,yes,lab in (('ctg_planned','IMP-CTG-YES','CTG decision'),('gbr_planned','IMP-GBR-YES','Simultaneous GBR decision')):
-  v=r(key)
-  if v==yes:reasons.append({'ctg_planned':'Connective tissue graft planned','gbr_planned':'Simultaneous GBR planned'}[key])
-  elif v is None:missing.append(lab)
- fd=r('facial_defect')
- if fd in (_DEH,_FEN):reasons.append('Potential facial dehiscence or fenestration')
- elif fd is None:missing.append('Facial defect (Surgical Assessment)')
- for key,bad,lab in (('horizontal_defect',('SUR-HDEF-PRESENT','SUR-HDEF-SUSPECTED'),'Horizontal bone deficiency'),('vertical_defect',('SUR-VDEF-PRESENT','SUR-VDEF-SUSPECTED'),'Vertical bone deficiency')):
-  v=r(key)
-  if v in bad:reasons.append(lab+' present or suspected')
-  elif v is None:missing.append(lab+' (Surgical Assessment)')
+ ctg,gbr=r('ctg_planned'),r('gbr_approach')
+ if ctg=='IMP-CTG-YES':reasons.append('Connective tissue graft at implant placement')
+ elif ctg is None:missing.append('CTG decision')
+ if gbr=='IMP-GBR-SIMULT':reasons.append('Simultaneous GBR')
+ elif gbr is None:missing.append('Regenerative approach')
+ elif gbr=='IMP-GBR-STAGED':
+  stt=r('staged_status')
+  if stt is None:missing.append('Staged GBR status')
+  elif stt=='IMP-STG-PENDING':return ('BL' if ctg=='IMP-CTG-YES' else 'DEFER'),reasons,missing
+ if gbr!='IMP-GBR-STAGED':
+  # Bone defects only drive the level when no staged reconstruction precedes the placement.
+  tail=' with no regeneration planned' if gbr=='IMP-GBR-NONE' else ''
+  fd=r('facial_defect')
+  if fd in (_DEH,_FEN):reasons.append('Potential facial dehiscence or fenestration'+tail)
+  elif fd is None:missing.append('Facial defect (Surgical Assessment)')
+  for key,bad,lab in (('horizontal_defect',('SUR-HDEF-PRESENT','SUR-HDEF-SUSPECTED'),'Horizontal bone deficiency'),('vertical_defect',('SUR-VDEF-PRESENT','SUR-VDEF-SUSPECTED'),'Vertical bone deficiency')):
+   v=r(key)
+   if v in bad:reasons.append(lab+' present or suspected'+tail)
+   elif v is None:missing.append(lab+' (Surgical Assessment)')
  for key,bad,lab,txt in (('soft_thickness','SUR-STT-DEFICIENT','Soft-tissue thickness','Soft-tissue thickness deficient'),('keratinized','SUR-KT-DEFICIENT','Keratinized tissue','Keratinized tissue band under 2 mm')):
   v=r(key)
   if v==bad:reasons.append(txt)
@@ -276,12 +287,41 @@ def implant_level():
  if reasons:return 'BL',reasons,missing
  return (None if missing else 'TL'),reasons,missing
 
+GBR_CRITERIA=(('gbrc_pos','3D implant position is prosthetically adequate','GBRC-POS'),('gbrc_stab','Primary stability is achievable','GBRC-STAB'),('gbrc_morph','Defect morphology favors graft stabilization and space maintenance','GBRC-MORPH'),('gbrc_clos','Soft tissues allow tension-free closure','GBRC-CLOS'))
+
+def gbr_support():
+ # Guidance for simultaneous vs staged GBR (Yu, Saleh, Wang 2023; Jung 2017). Orientative, never an automatic indication.
+ relevant=r('horizontal_defect') in ('SUR-HDEF-PRESENT','SUR-HDEF-SUSPECTED') or r('facial_defect') in (_DEH,_FEN) or r('gbr_approach') in ('IMP-GBR-SIMULT','IMP-GBR-STAGED')
+ if r('gbr_approach')=='IMP-GBR-STAGED' and r('staged_status')=='IMP-STG-HEALED':return None   # already reconstructed and re-evaluated
+ if not relevant:return None
+ aug,deh=r('h_aug'),r('deh_height')
+ rank={'small':0,'mid':1,'large':2}
+ size,notes=None,[]
+ def put(level,note):
+  nonlocal size
+  notes.append(note)
+  if size is None or rank[level]>rank[size]:size=level
+ if aug is not None and aug>0:
+  if aug<=3:put('small','Horizontal augmentation of '+format(aug,'g')+' mm (1 to 3 mm): simultaneous GBR is generally favorable.')
+  elif aug<=5:put('mid','Horizontal augmentation of '+format(aug,'g')+' mm (4 to 5 mm): simultaneous GBR only in selected cases, especially contained defects; consider a staged approach.')
+  else:put('large','Horizontal augmentation of '+format(aug,'g')+' mm (6 mm or more): staged regeneration is generally preferable.')
+ if deh is not None and deh>0:
+  if deh<=3:put('small','Dehiscence height of '+format(deh,'g')+' mm (3 mm or less): within the small-defect criterion.')
+  else:put('mid','Dehiscence height of '+format(deh,'g')+' mm exceeds the 3 mm small-defect criterion: evaluate a staged approach.')
+ failed=[lab for k,lab,c in GBR_CRITERIA if r(k)=='IMP-'+c+'-NO']
+ pending=[lab for k,lab,c in GBR_CRITERIA if r(k) is None]
+ if size=='large' or failed:verdict='staged'
+ elif size=='mid':verdict='selected'
+ elif size=='small' and not pending:verdict='simult'
+ else:verdict='pending'
+ return dict(verdict=verdict,notes=notes,failed=failed,pending=pending,size=size)
+
 def implant_scenarios():
  u=(r('teeth',[]) or [''])[0][-1:]
  anterior,posterior,incisor=bool(u) and u in '123',bool(u) and u in '45678',bool(u) and u in '12'
  site,bq=r('site'),r('bone_quality')
  imm_pl,imm_ld=r('immediate_placement'),r('immediate_loading')
- ctg,gbr=r('ctg_planned'),r('gbr_planned')
+ ctg,gbr=r('ctg_planned'),r('gbr_approach')
  defect=r('facial_defect') in (_DEH,_FEN)
  apical=r('adjacent_roots')=='SUR-ROOTS-DILACERATED' or any(c in (r('anat_structures',[]) or []) for c in _APICAL)
  level,_,_=implant_level()
@@ -293,7 +333,7 @@ def implant_scenarios():
  ('BL',bq in ('SUR-BQ-D1','SUR-BQ-D2'),'Dense bone / thick cortex (D1 to D2)','BLC or BLT with an adequate preparation','BLX with an adapted sequence','The choice must control cortical compression, not maximize torque.','Avoid overcompression; use a specific drilling/thread protocol and control heat.'),
  ('BL',apical,'Restricted apical anatomy (dilacerated roots or nearby anatomical structures)','BLC or BLT','BLX if it allows orientation','The thin C apex and the BLT apical taper favor selective anatomical evaluation.','Confirm distances to roots, cortex and anatomical structures.'),
  ('BL',incisor and 'PRO-SPACELIM-RED_MD' in (r('pro_space_lim',[]) or []),'Narrow mesiodistal space (selected incisors)','BLT Ø2.9 SC','BLC Ø3.3 if the anatomy allows','Ø2.9 has specific indications for narrow incisors; it is not a universal space solution.','Validate the mesiodistal distance, restorative diameter and forces; check the IFU exclusions.'),
- ('BL',defect and gbr=='IMP-GBR-YES','Buccal defect / dehiscence with simultaneous GBR','BLC / BLT','BLX if additional stability is required','Bone Level is prioritized for regeneration management and 3D position.','Assess the severity of the defect and the need for a staged approach.'),
+ ('BL',defect and gbr=='IMP-GBR-SIMULT','Buccal defect / dehiscence with simultaneous GBR','BLC / BLT','BLX if additional stability is required','Bone Level is prioritized for regeneration management and 3D position.','Assess the severity of the defect and the need for a staged approach.'),
  ('TL',posterior and site=='CASE-SITE-HEALED' and imm_ld=='IMP-IMMLD-NO' and level=='TL','Healed posterior site; adequate STH, gingiva and bone; no GBR','TLC','TLX','Transmucosal Tissue Level when the shoulder position is prosthetically favorable.','Ensure hygiene access, emergence, restorability and phenotype.'),
  ('TL',posterior and imm_ld=='IMP-IMMLD-YES' and level=='TL','Posterior site with adequate tissues; immediate loading under evaluation','TLX','BLX if Tissue Level is not suitable','X favors stability; TLX keeps the transmucosal prosthetic connection.','Do not prioritize TLX if the tissue anatomy requires CTG/GBR.')]
  return [dict(lvl=a,name=c,first=d,alts=e,why=f,flt=g) for a,b,c,d,e,f,g in S if b]
@@ -305,7 +345,7 @@ _FAMRE=r'(BLT|BLC|BLX|TLC|TLX)'
 def size_ceiling():
  # (max diameter, max length) in mm from the entered measures; None when not entered.
  w,md,h=r('ridge_width'),r('md_bone'),r('ridge_height')
- ds=[v-2*SAFETY_MARGIN_MM for v in (w,md) if v is not None]
+ ds=[v for v in (None if w is None else w-(BUCCAL_MM+PALATAL_MM),None if md is None else md-2*PROX_MM) if v is not None]
  return (min(ds) if ds else None),(h-VERT_MARGIN_MM if h is not None else None)
 
 def soft_tissue_notes():
@@ -575,8 +615,12 @@ elif step==3:
   with st.container(border=True):
    st.markdown('<div class="col-title">Bone Deficiencies &amp; Surgical Considerations</div><div class="col-desc">Can the implant be placed correctly, with sufficient bone support?</div>',unsafe_allow_html=True)
    pick('horizontal_defect','Horizontal bone deficiency',opts('HDEF',[('NONE','None apparent',''),('PRESENT','Present',''),('SUSPECTED','Suspected','')],prefix='SUR'))
+   if r('horizontal_defect') in ('SUR-HDEF-PRESENT','SUR-HDEF-SUSPECTED'):numeric('h_aug','Horizontal augmentation required (mm)',max_value=20,help='Horizontal bone gain needed to place the implant with adequate buccal and palatal bone. Guides simultaneous (1 to 3 mm) versus staged (6 mm or more) regeneration. The defect morphology matters as much as the number.')
+   else:clear('h_aug')
    pick('vertical_defect','Vertical bone deficiency',opts('VDEF',[('NONE','None apparent',''),('PRESENT','Present',''),('SUSPECTED','Suspected','')],prefix='SUR'))
    pick('facial_defect','Facial defect relative to prosthetic axis',opts('FACIAL',[('NONE','None anticipated',''),('DEHISCENCE','Potential dehiscence',''),('FENESTRATION','Potential fenestration','')],prefix='SUR'))
+   if r('facial_defect')==_DEH:numeric('deh_height','Dehiscence height (mm)',max_value=20,help='Vertical height of the exposed implant surface expected at the buccal aspect. A height of 3 mm or less is considered a small defect.')
+   else:clear('deh_height')
    if r('facial_defect') in ('SUR-FACIAL-DEHISCENCE','SUR-FACIAL-FENESTRATION'):
     pick('angulation','Angulated pathway',opts('ANGUL',[('FEASIBLE','Potentially feasible',''),('NOTAPPROPRIATE','Not prosthetically appropriate','')],prefix='SUR'))
    else:clear('angulation')
@@ -597,14 +641,35 @@ elif step==4:
    st.markdown('<div class="col-title">Planning decisions that guide the family</div><div class="col-desc">Not captured in the earlier modules. Leave a question unanswered if it is still undecided.</div>',unsafe_allow_html=True)
    ca,cb=st.columns(2)
    with ca:
-    pick('ctg_planned','Connective tissue graft (CTG) planned?',YN('CTG'),'CTG for contour or thickness. It is not the same as increasing the vertical supracrestal tissue height: record both goals and their measures separately.')
+    pick('ctg_planned','Connective tissue graft (CTG) at implant placement?',YN('CTG'),'CTG performed in the same procedure as the implant placement, for lack of thickness or volume. It is not the same as increasing the vertical supracrestal tissue height (STH): record both goals and their measures separately.')
     if r('ctg_planned')!='IMP-CTG-YES' and r('soft_thickness')=='SUR-STT-DEFICIENT':st.caption('Soft-tissue thickness was recorded as deficient: a CTG for thickness is suggested.')
     elif r('ctg_planned') is None and (r('pro_ridge')=='PRO-RIDGE-DEFICIENT' or r('pro_margin')=='PRO-MARGIN-APICAL'):st.caption('The prosthetic assessment suggests that soft-tissue augmentation may be needed.')
     if r('site')=='CASE-SITE-EXTRACT':pick('immediate_placement','Immediate placement at extraction?',YN('IMMPL'),'Placement in the extraction socket at the time of extraction (ITI Type 1).')
     else:clear('immediate_placement')
    with cb:
-    pick('gbr_planned','Simultaneous GBR planned?',YN('GBR'),'Guided bone regeneration performed at the time of implant placement.')
+    pick('gbr_approach','Regenerative approach',opts('GBR',[('NONE','No regeneration planned',''),('SIMULT','Simultaneous GBR','Regeneration at the time of implant placement, for a small localized defect when the 3D position and primary stability are achievable.'),('STAGED','Staged GBR (before the implant)','Reconstruction first for an extensive defect; the ridge and soft tissues are re-evaluated after healing.')],prefix='IMP'),'Timing of bone regeneration relative to implant placement. A localized defect with achievable position and stability may allow simultaneous GBR; an extensive one usually needs a staged approach.')
+    if r('gbr_approach')=='IMP-GBR-STAGED':pick('staged_status','Staged GBR status',opts('STG',[('PENDING','Not yet performed','Reconstruction still to be done; reassess the ridge and soft tissues after healing.'),('HEALED','Healed and re-evaluated','The Surgical Assessment answers describe the re-evaluated site.')],prefix='IMP'))
+    else:clear('staged_status')
     pick('immediate_loading','Immediate provisionalization or loading proposed?',YN('IMMLD'),'Loading only after verifying torque/ISQ according to a validated protocol, absence of micromovement and occlusal control.')
+  sup=gbr_support()
+  if sup:
+   with st.container(border=True):
+    st.markdown('<div class="col-title">Simultaneous or staged regeneration</div><div class="col-desc">Orientative criteria, not an automatic indication. Answer what you have assessed.</div>',unsafe_allow_html=True)
+    cc1,cc2=st.columns(2)
+    for i_,(k_,lab_,c_) in enumerate(GBR_CRITERIA):
+     with (cc1 if i_%2==0 else cc2):pick(k_,lab_,opts(c_,[('YES','Yes',''),('NO','No','')],prefix='IMP'))
+    sup=gbr_support()
+    for t_ in sup['notes']:st.write('• '+t_)
+    if sup['failed']:st.write('⚠️ Criterion not met: '+'; '.join(sup['failed'])+'.')
+    v_=sup['verdict']
+    if v_=='staged':st.write('‼️ Evaluate staged regeneration (reconstruct first, then re-evaluate the ridge and soft tissues). It is not recommended automatically from one number.')
+    elif v_=='selected':st.write('⚠️ Simultaneous GBR only in selected cases; consider a staged or deferred approach.')
+    elif v_=='simult':st.write('✅ Criteria met: simultaneous GBR is reasonable. In this CDSS it prioritizes Bone Level (BLT, BLC or BLX).')
+    else:st.write('ℹ️ Pending to conclude: '+', '.join((['defect size (augmentation or dehiscence height)'] if sup['size'] is None else [])+sup['pending'])+'.')
+    ga_=r('gbr_approach')
+    if ga_=='IMP-GBR-SIMULT' and v_ in ('staged','selected'):notice('Simultaneous GBR is selected, but the criteria suggest evaluating a staged approach.')
+    if ga_=='IMP-GBR-NONE':notice('A bone defect is recorded but no regeneration is planned: confirm this decision.')
+    st.caption('Reference: Yu, Saleh and Wang 2023 (1 to 3 mm favorable; 4 to 5 mm selected cases; 6 mm or more staged). A fully extraosseous 2 mm defect can be more complex than a contained 4 mm one. ITI 2023 recommends more than 1.5 mm of buccal bone at healed ridges and favors simultaneous regeneration of buccal dehiscences.')
   level,reasons,missing=implant_level()
   matched=implant_scenarios()
   # --- tissue rule
@@ -613,9 +678,14 @@ elif step==4:
     st.markdown('#### Tissue rule · Bone Level prioritized')
     st.write('✅ Reasons: '+', '.join(reasons)+'. Bone Level offers more flexibility to manage emergence, depth and peri-implant tissue during augmentation.')
     st.write('⚠️ Specify the CTG goal (thickness or volume); do not assume a vertical STH increase. With GBR, confirm primary stability and closure and reassess staged versus simultaneous.')
+    st.write('‼️ Bone Level priority for simultaneous CTG or GBR is a rule agreed for this CDSS, not an absolute contraindication of the manufacturer for Tissue Level.')
+   elif level=='DEFER':
+    st.markdown('#### Tissue rule · Re-evaluate after staged GBR')
+    st.write('✅ After healing, re-evaluate the ridge and the soft tissues. Bone Level (BLT, BLC, BLX) or Tissue Level (TLC, TLX) can then be considered if the anatomy and the restoration allow it.')
+    st.write('⚠️ The options below are provisional: they assume the current site. Update Surgical Assessment and the status of the staged GBR once the ridge has healed.')
    elif level=='TL':
     st.markdown('#### Tissue rule · Tissue Level eligible (TLC or TLX)')
-    st.write('✅ Bone and tissues are adequate and no regeneration is planned: transmucosal approach with the prosthetic connection away from the bone, if the position is restorable.')
+    st.write('✅ Bone and tissues are adequate and no simultaneous regeneration is planned: transmucosal approach with the prosthetic connection away from the bone, if the position is restorable.')
     st.write('⚠️ Validate cleansability, esthetics, shoulder level and vertical space. Bone Level remains valid when the prosthetic objectives favor it.')
     st.write('‼️ Excluding Tissue Level when CTG/GBR is planned is a deliberate, conservative rule of this CDSS, not a universal contraindication.')
    else:
@@ -636,9 +706,9 @@ elif step==4:
   else:main=dict(name='No specific scenario matched',first='BLC, BLT or BLX',alts='Choose with the tie-breakers below',why='All Bone Level families are valid candidates; differentiate them by primary-stability needs, bed type and loading protocol.',flt='Confirm anatomy, restorative platform and component availability.')
   options_=implant_options(main)
   dmax_,lmax_=size_ceiling()
-  if dmax_ is not None and dmax_<=0:notice('The measured space leaves no room for an implant with the safety margin of '+format(SAFETY_MARGIN_MM,'g')+' mm; review the plan.')
-  st.markdown('#### Treatment options'+('  (provisional)' if level is None else ''))
-  st.caption('Scenario: '+main['name']+'. Sizes are ceilings computed from your measures with a '+format(SAFETY_MARGIN_MM,'g')+' mm bone margin; exact diameters and lengths will come from the Straumann USA SKU table.')
+  if dmax_ is not None and dmax_<=0:notice('The measured space leaves no room for an implant with the bone margins (buccal '+format(BUCCAL_MM,'g')+' mm, palatal/lingual '+format(PALATAL_MM,'g')+' mm, '+format(PROX_MM,'g')+' mm to each adjacent root); review the plan.')
+  st.markdown('#### Treatment options'+('  (provisional)' if level in (None,'DEFER') else ''))
+  st.caption('Scenario: '+main['name']+'. Sizes are ceilings from your measures: width needed is the diameter + '+format(BUCCAL_MM+PALATAL_MM,'g')+' mm (buccal '+format(BUCCAL_MM,'g')+' + palatal/lingual '+format(PALATAL_MM,'g')+'); mesiodistal space needed is the diameter + '+format(2*PROX_MM,'g')+' mm; exact diameters and lengths will come from the Straumann USA SKU table.')
   cols_=st.columns(len(options_)) if options_ else []
   for col_,o_,tag_ in zip(cols_,options_,'AB'):
    with col_:
