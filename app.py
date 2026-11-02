@@ -127,7 +127,7 @@ st.markdown("""<style>
 
 MODULES = [
     'Patient Data & Priorities', 'Case Type & Site', 'Prosthetic Assessment',
-    'Surgical Assessment', 'Implant Selection', 'Surgical Planning',
+    'Surgical Assessment', 'Treatment Strategy & Implant Selection', 'Surgical Planning',
     'Restorative Planning', 'Maintenance Program'
 ]
 NEEDS = {
@@ -269,7 +269,7 @@ def implant_level():
  elif gbr=='IMP-GBR-STAGED':
   stt=r('staged_status')
   if stt is None:missing.append('Staged GBR status')
-  elif stt=='IMP-STG-PENDING':return ('BL' if ctg=='IMP-CTG-YES' else 'DEFER'),reasons,missing
+  elif stt=='IMP-STG-PENDING':return 'DEFER',reasons,missing
  if gbr!='IMP-GBR-STAGED':
   # Bone defects only drive the level when no staged reconstruction precedes the placement.
   tail=' with no regeneration planned' if gbr=='IMP-GBR-NONE' else ''
@@ -284,6 +284,8 @@ def implant_level():
   v=r(key)
   if v==bad:reasons.append(txt)
   elif v is None:missing.append(lab+' (Surgical Assessment)')
+ if r('sth_adequacy')=='IMP-STH-NO':reasons.append('STH judged inadequate for the intended implant platform')
+ elif r('sth_adequacy') is None:missing.append('STH suitability for the restorative platform')
  if reasons:return 'BL',reasons,missing
  return (None if missing else 'TL'),reasons,missing
 
@@ -428,6 +430,185 @@ def clear(*names,to=None):
 def goto(step):
  st.session_state.step=max(0,min(8,step))
  st.rerun()
+
+
+# -----------------------------------------------------------------------------
+# Treatment strategy explorer: clinical-decision prototype (Module 05)
+# The dimensional matrix reflects the CLINICIAN-REVISED local project catalog.
+# It is not a real-time US store inventory or SKU-by-SKU regulatory check.
+# -----------------------------------------------------------------------------
+IMPLANT_CATALOG = {
+ 'IMP-FAM-BLT': {2.9:(10,12,14),3.3:(8,10,12,14),4.1:(8,10,12,14),4.8:(8,10,12,14)},
+ 'IMP-FAM-BLC': {3.3:(8,10,12,14),3.75:(6,8,10,12,14),4.0:(6,8,10,12,14),4.5:(6,8,10,12,14),5.0:(6,8,10,12,14),5.5:(6,8,10,12,14),6.5:(6,8,10,12,14)},
+ 'IMP-FAM-BLX': {3.5:(8,10,12,14),3.75:(6,8,10,12,14),4.0:(6,8,10,12,14),4.5:(6,8,10,12,14),5.0:(6,8,10,12,14),5.5:(6,8,10,12,14),6.5:(6,8,10,12,14)},
+ 'IMP-FAM-TLC': {3.3:(8,10,12,14),3.75:(6,8,10,12,14),4.5:(6,8,10,12,14),5.5:(6,8,10,12),6.5:(6,8,10)},
+ 'IMP-FAM-TLX': {3.75:(6,8,10,12,14),4.5:(6,8,10,12,14),5.5:(6,8,10,12),6.5:(6,8,10,12)},
+}
+
+st.markdown('''<style>
+.tp-lead {color:#566B7D;font-size:.90rem;line-height:1.5;margin-top:-8px;margin-bottom:13px}
+.tp-finding {background:linear-gradient(180deg,#F5F8FB,#FFFFFF);border:1px solid #E0E8EC;border-radius:12px;padding:13px 14px;min-height:100px}
+.tp-finding .k {font-size:.74rem;font-weight:750;color:#48637D;letter-spacing:.04em;text-transform:uppercase}
+.tp-finding .v {font-size:1.0rem;font-weight:800;color:#273246;margin:5px 0}
+.tp-finding .s {font-size:.76rem;color:#607384;line-height:1.35}
+.tp-label {font-size:.76rem;letter-spacing:.075em;text-transform:uppercase;color:#4A777B;font-weight:850;margin-top:9px;margin-bottom:4px}
+.tp-chip {display:inline-block;border-radius:999px;padding:5px 11px;font-size:.76rem;font-weight:800;background:#E6F4F3;color:#1E6668;margin:2px 0 9px}
+.tp-chip.alt {background:#E9F0FB;color:#355A8C}
+.tp-head {border-bottom:1px solid #E3E9ED;padding-bottom:11px;margin-bottom:9px}
+.tp-title {font-weight:850;font-size:1.11rem;line-height:1.25;color:#30476C}
+.tp-sub {color:#647589;font-size:.82rem;margin-top:3px;line-height:1.35}
+.tp-slab {background:#F6F9FA;border:1px solid #E5EBEC;border-radius:11px;padding:10px 12px;margin:7px 0}
+.tp-slab h4 {font-size:.81rem;color:#3E5876;font-weight:850;margin:0 0 5px}
+.tp-slab p {font-size:.85rem;color:#344253;margin:0 0 5px;line-height:1.45}
+.tp-slab p:last-child {margin-bottom:0}
+.tp-state {font-size:.78rem;line-height:1.4;padding:9px 11px;border-radius:9px;background:#F5F8FA;color:#344A61;margin-top:8px}
+.tp-note {color:#5B6D7E;font-size:.80rem;line-height:1.5}
+</style>''',unsafe_allow_html=True)
+
+def tp_fmt(v):
+ return format(float(v),'.2f').rstrip('0').rstrip('.') if v is not None else '—'
+
+def tp_site_info():
+ t=(r('teeth',[]) or [''])[0]
+ if not t:return {'anterior':False,'maxilla':False,'molar':False,'posterior':False,'kind':None,'target':None,'low':None,'high':None}
+ pos=t[-1:]
+ maxilla=t[0] in '12'
+ lower_incisor=pos in '12' and not maxilla
+ upper_lateral=pos=='2' and maxilla
+ if lower_incisor or upper_lateral: return dict(anterior=True,maxilla=maxilla,molar=False,posterior=False,kind='narrow incisor',target=3.3,low=2.9,high=3.5)
+ if pos=='1' and maxilla:return dict(anterior=True,maxilla=True,molar=False,posterior=False,kind='upper central incisor',target=3.75,low=3.3,high=4.0)
+ if pos in '345':return dict(anterior=pos=='3',maxilla=maxilla,molar=False,posterior=pos in '45',kind='canine or premolar',target=3.75,low=3.3,high=4.0)
+ if pos in '678':return dict(anterior=False,maxilla=maxilla,molar=True,posterior=True,kind='molar',target=4.5,low=3.75,high=5.5)
+ return dict(anterior=False,maxilla=maxilla,molar=False,posterior=False,kind=None,target=None,low=None,high=None)
+
+def tp_has_bone_defect():
+ return (r('horizontal_defect') in ('SUR-HDEF-PRESENT','SUR-HDEF-SUSPECTED')
+  or r('vertical_defect') in ('SUR-VDEF-PRESENT','SUR-VDEF-SUSPECTED')
+  or r('facial_defect') in (_DEH,_FEN))
+
+def tp_has_soft_defect():
+ return (r('soft_thickness')=='SUR-STT-DEFICIENT'
+  or r('keratinized')=='SUR-KT-DEFICIENT'
+  or r('sth_adequacy')=='IMP-STH-NO')
+
+def tp_family_pair(level):
+ info=tp_site_info()
+ narrow=info['kind']=='narrow incisor' and ('PRO-SPACELIM-RED_MD' in (r('pro_space_lim',[]) or []))
+ if narrow:return 'IMP-FAM-BLT','IMP-FAM-BLC'
+ imm=r('immediate_loading')=='IMP-IMMLD-YES'
+ if level=='TL':return ('IMP-FAM-TLX','IMP-FAM-TLC') if imm else ('IMP-FAM-TLC','IMP-FAM-TLX')
+ if imm or r('bone_quality')=='SUR-BQ-D4':return 'IMP-FAM-BLX','IMP-FAM-BLT'
+ if r('immediate_placement')=='IMP-IMMPL-YES':return 'IMP-FAM-BLT','IMP-FAM-BLX'
+ return 'IMP-FAM-BLC','IMP-FAM-BLT'
+
+def tp_sizes(family,post_augmentation=False,short_only=False):
+ 'Dimensional screening only, never an implant clearance or full 3D CBCT analysis.'
+ info=tp_site_info()
+ w,md,h=r('ridge_width'),r('md_bone'),r('ridge_height')
+ # Avoid implying that an unmeasured dimension is adequate.
+ dims_known=w is not None and md is not None
+ # For esthetic zone, screen for 2 mm facial bone; elsewhere use 1.6 (>1.5 mm).
+ facial=2.0 if r('esthetic')=='Yes' or info['anterior'] else 1.6
+ max_d=min(w-facial-PALATAL_MM,md-2*PROX_MM) if dims_known else None
+ all_d=IMPLANT_CATALOG[family]
+ diameters=[d for d in all_d if (info['low'] is None or info['low']<=d<=info['high']) and (max_d is None or d<=max_d)]
+ # Regenerated bone must be remeasured before any candidate diameter or length is proposed.
+ if post_augmentation:return dict(diameters=[],lengths=[],pick=None,ceiling=None,facial=facial,reason='Reassess the regenerated anatomy before specifying an implant dimension.')
+ if not dims_known:diameters=[]
+ if not diameters: return dict(diameters=[],lengths=[],pick=None,ceiling=max_d,facial=facial,reason='Bone width and interradicular distance are required.' if not dims_known else 'No listed diameter meets the current preliminary space screen.')
+ if h is None:return dict(diameters=diameters,lengths=[],pick=None,ceiling=max_d,facial=facial,reason='Residual bone height is missing; no exact length is proposed.')
+ # Simple conservative initial length screen, NOT a fixed safety requirement for all sites.
+ length_cap=h-VERT_MARGIN_MM
+ length_candidates={d:[int(x) for x in all_d[d] if x<=length_cap and (not short_only or x<=8)] for d in diameters}
+ valid_diameters=[d for d in diameters if length_candidates[d]]
+ if not valid_diameters:
+  return dict(diameters=[],lengths=[],pick=None,ceiling=max_d,facial=facial,reason='No catalog diameter/length pair satisfies the conservative preliminary height screen; consider further assessment or reconstruction.')
+ target=info['target'] or valid_diameters[0]
+ diameter=min(valid_diameters,key=lambda d:(abs(d-target),d))
+ ls=length_candidates[diameter]
+ chosen=10 if 10 in ls else max(ls)
+ return dict(diameters=valid_diameters,lengths=ls,pick=(diameter,chosen),ceiling=max_d,facial=facial,reason='Provisional dimensional match; verify complete implant/osteotomy geometry, CBCT anatomy, prosthetics, IFU and exact USA SKU.')
+
+def tp_restoration_text():
+ retention=r('preview_retention')
+ access=r('preview_access')
+ ret={
+  'TP-RET-SCREW':'Screw-retained restoration preferred, if access and component compatibility permit.',
+  'TP-RET-SCREWMENT':'Screw-cement retained (extraoral cementation) to evaluate, if components and retrievability are appropriate.',
+  'TP-RET-CEMENT':'Cement-retained restoration to evaluate with particular attention to residual cement.',
+ }.get(retention,'Evaluate screw-retained vs screw-cement retained vs cement-retained options.')
+ acc={
+  'TP-ACC-STRAIGHT':'Straight screw channel anticipated; confirm wax-up and restorability.',
+  'TP-ACC-ANGLED':'Angled screw-channel concept to assess within the manufacturer-approved component limits.',
+ }.get(access,'Screw-access axis not assessed; straight vs angled channel remains open.')
+ return ret,acc
+
+def tp_build_plans():
+ 'Two comparative pathways; unresolved/unfeasible ideas are clearly labeled.'
+ level,reasons,missing=implant_level()
+ info=tp_site_info()
+ h=r('ridge_height')
+ sinus_case=info['maxilla'] and info['molar'] and h is not None and h<REDUCED_HEIGHT_MM
+ gbr_case=tp_has_bone_defect() or r('gbr_approach')=='IMP-GBR-SIMULT' or (r('gbr_approach')=='IMP-GBR-STAGED' and r('staged_status')!='IMP-STG-HEALED')
+ soft_case=tp_has_soft_defect() or r('ctg_planned')=='IMP-CTG-YES'
+ staged_pending=(r('gbr_approach')=='IMP-GBR-STAGED' and r('staged_status')!='IMP-STG-HEALED')
+ mode='routine'
+ if staged_pending:mode='staged_pending'
+ elif gbr_case:mode='gbr'
+ elif sinus_case:mode='sinus'
+ elif soft_case:mode='soft'
+ first,second=tp_family_pair(level)
+ plans=[dict(key='A',family=first,post=False,short=False,surgery='',title='',subtitle='',constraints='',pros='',limits=''),
+        dict(key='B',family=second,post=False,short=False,surgery='',title='',subtitle='',constraints='',pros='',limits='')]
+ a,b=plans
+ if mode=='sinus':
+  a.update(title='Reduced Surgical Intervention',subtitle='Short-implant pathway, only if demonstrably feasible',surgery='Implant placement without sinus elevation, conditional on adequate native bone, stability and restorative risk assessment.',short=True,pros='May avoid a sinus augmentation procedure if dimensions and loading are favorable.',limits='Reduced vertical height alone does not validate an implant. Assess the sinus floor, stability, prosthetic crown height and long-term loading.')
+  b.update(title='Reconstructive Approach',subtitle='Sinus floor elevation with implant placement or staging',surgery='Evaluate transcrestal or lateral-window sinus elevation and simultaneous vs delayed implant placement according to residual bone and sinus findings.',post=True,pros='May permit additional bone height when the native site does not support a suitable implant.',limits='More surgical intervention and potential healing stages; assess sinus health and anatomy before any proposal.')
+  # Conservative rule for possible simultaneous sinus augmentation: Bone Level.
+  # Tissue Level can be reconsidered after staged healing and re-evaluation.
+  if b['family'].startswith('IMP-FAM-T'):b['family']='IMP-FAM-BLC'
+ elif mode=='gbr':
+  a.update(title='Simultaneous GBR',subtitle='Implant and localized augmentation in one intervention',surgery='Consider simultaneous GBR only if prosthetically correct 3D placement, primary stability, graft stabilization and tension-free soft-tissue closure are achievable.',pros='May avoid a separate reconstruction stage for a suitably contained/localized defect.',limits='Not appropriate solely because the defect appears small: morphology and stability govern feasibility.')
+  b.update(title='Staged Bone Regeneration',subtitle='Reconstruct first; remeasure after healing',surgery='Perform staged ridge augmentation when the defect or inability to achieve safe 3D placement/stability calls for site development.',post=True,pros='Allows reconstruction and reassessment before implant selection.',limits='Additional intervention/healing time; final size and platform cannot be confirmed until reassessment.')
+  # Local CDSS policy: simultaneous GBR -> Bone Level. Do not suggest TL until staged regeneration is healed and re-evaluated.
+  if first.startswith('IMP-FAM-T'):a['family']='IMP-FAM-BLC'
+  if second.startswith('IMP-FAM-T'):b['family']='IMP-FAM-BLT'
+ elif mode=='soft':
+  a.update(title='Simultaneous Soft-tissue Augmentation',subtitle='Manage the deficit during implant placement',surgery='If increased mucosal thickness/volume is indicated, assess CTG at placement; for insufficient keratinized tissue, separately assess FGG or an apically positioned flap.',pros='May address the soft-tissue objective during the implant intervention.',limits='CTG does not necessarily increase vertical STH. Tissue goal, donor-site morbidity and healing must be considered.')
+  b.update(title='Staged Soft-tissue Optimization',subtitle='Augment tissue and re-evaluate the implant site',surgery='Consider a staged soft-tissue procedure if adequate tissues or an appropriate restorative platform cannot be achieved at placement.',post=True,pros='Allows tissue stability and the definitive implant level to be reassessed.',limits='Extra surgical phase; Tissue Level can be reconsidered only if the final tissue and bone conditions are favorable.')
+  if first.startswith('IMP-FAM-T'):a['family']='IMP-FAM-BLC'
+  if second.startswith('IMP-FAM-T'):b['family']='IMP-FAM-BLT'
+ elif mode=='staged_pending':
+  a.update(title='Staged GBR — Required First',subtitle='Implant choice deferred until ridge reconstruction heals',surgery='Complete the planned staged GBR and reassess the reconstructed ridge, soft tissues and implant axis.',post=True,pros='Defers the implant choice until a reliable post-augmentation anatomy is available.',limits='Do not specify a definitive implant size or claim Tissue Level eligibility before reassessment.')
+  b.update(title='Re-evaluate Alternative Plan',subtitle='Clinical review of reconstruction needs',surgery='Reassess defect morphology and whether a different surgical or prosthetic approach can meet the restorative objectives. No direct-placement pathway is cleared.',post=True,pros='Provides a clinician review pathway without assuming unnecessary augmentation.',limits='An alternative pathway cannot be offered as clinically feasible without new measurements and a 3D plan.')
+ else:
+  a.update(title='Direct Placement Strategy',subtitle='No additional regeneration if truly unnecessary',surgery='Assess direct placement within the existing ridge; confirm primary stability, 3D restoration-guided position and soft-tissue adequacy.',pros='Can avoid augmentation if sufficient bone and tissues are confirmed.',limits='Do not treat incomplete tissue, bone or sinus findings as absence of a defect.')
+  b.update(title='Alternative Implant Design',subtitle='Same surgical pathway, different macrodesign',surgery='Compare the same non-regenerative surgical pathway using an alternative implant geometry and its drilling protocol.',pros='A second implant-design option without inventing a reconstructive indication.',limits='The design comparison is not evidence that a different implant is superior for this patient.')
+ for p in plans:
+  if r('ctg_planned')=='IMP-CTG-YES' and mode not in ('soft','staged_pending'):
+   p['surgery']+=' Reassess the simultaneous CTG objective for thickness/contour at implant placement; this does not in itself correct vertical STH.'
+  d=tp_sizes(p['family'],post_augmentation=p['post'],short_only=p['short'])
+  p['sizes']=d
+  p['size_display']=('Ø'+tp_fmt(d['pick'][0])+' × '+tp_fmt(d['pick'][1])+' mm · screening candidate') if d['pick'] else 'Dimensions pending / no valid match'
+  if p['post']:p['status']='Provisional: reassess after augmentation'
+  elif not d['pick']:p['status']='Not dimensionally cleared with current data'
+  else:p['status']='Dimensional candidate only — clinical validation required'
+  if p['key']=='A' and mode=='gbr':
+   sup=gbr_support()
+   if sup and sup['verdict'] in ('staged','selected','pending'):
+    p['status']=('Simultaneous GBR not supported by screening criteria' if sup['verdict']=='staged' else 'Simultaneous GBR suitability pending review')
+  if mode=='sinus' and r('sinus') in ('SUR-SINUS-POSSIBLE','SUR-SINUS-TREATED'):
+   p['status']='Sinus condition requires assessment before pathway selection'
+ return dict(mode=mode,level=level,reasons=reasons,missing=missing,plans=plans)
+
+def tp_export_html(plans_result):
+ name=escape(str(r('name') or 'Not recorded'))
+ teeth=escape(', '.join(r('teeth',[]) or []))
+ snippets=[]
+ for p in plans_result['plans']:
+  snippets.append('<section><h2>Option '+p['key']+' — '+escape(p['title'])+'</h2><p>'+escape(p['subtitle'])+'</p><p><b>Approach:</b> '+escape(p['surgery'])+'</p><p><b>Implant:</b> '+escape(FAMILIES[p['family']])+'</p><p><b>Dimensions:</b> '+escape(p['size_display'])+'</p><p><b>Status:</b> '+escape(p['status'])+'</p><p><b>Potential benefit:</b> '+escape(p['pros'])+'</p><p><b>Limitation:</b> '+escape(p['limits'])+'</p></section>')
+ ret,acc=tp_restoration_text()
+ return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Implant treatment comparison</title><style>body{font:15px Arial,sans-serif;max-width:970px;margin:38px auto;color:#273246}h1{color:#35537e}section{border:1px solid #dae4e7;border-radius:12px;padding:20px;margin:14px 0}h2{color:#365e74}p{line-height:1.5}.footer{font-size:12px;color:#607080}</style></head><body><h1>Treatment Strategy &amp; Implant Selection</h1><p><b>Patient:</b> '+name+' &nbsp; <b>Site (FDI):</b> '+teeth+'</p><p><b>Clinical notes:</b> '+escape(', '.join(plans_result['reasons']) or 'Pending clinical review')+'</p>'+''.join(snippets)+'<section><h2>Restorative discussion</h2><p>'+escape(ret)+'</p><p>'+escape(acc)+'</p></section><p class="footer">Clinical decision-support draft only. Dimensions are from the clinician-edited project matrix and are not verified US SKUs. Use current manufacturer IFU, case-specific CBCT evaluation and clinician judgment. This report may include patient data; handle securely.</p></body></html>')
 
 with st.sidebar:
  # 1 · Patient name (large) + compact context
@@ -631,162 +812,175 @@ elif step==3:
  st.info('No implant is cleared based on height or width alone. Anatomy, safety distances and manufacturer dimensions require independent assessment.')
 
 elif step==4:
- st.markdown('### Implant selection · design-based proposal')
+ st.markdown('### Treatment Strategy & Implant Selection')
+ st.markdown('<div class="tp-lead">Compare feasible treatment pathways first; then review implant design, exact catalog sizes and a preliminary restorative approach. The clinician makes the final decision.</div>',unsafe_allow_html=True)
  patient_context()
- if r('case_type')!='CASE-TYPE-SINGLE':notice('This demonstration evaluates a single restoration only; selected case type requires a future pathway.')
- elif not r('teeth') or r('site') is None:st.info('Select the tooth and the current site condition in Case Type & Site to generate a proposal.')
+ if r('case_type')!='CASE-TYPE-SINGLE':
+  notice('This working prototype generates paired proposals only for a single-tooth restoration. Other case types are preserved and will need their own pathway logic.')
+ elif not r('teeth') or r('site') is None:
+  st.info('Select a tooth and the current site condition in Case Type & Site. The comparison will appear here afterward.')
  else:
-  YN=lambda v:opts(v,[('YES','Yes',''),('NO','No','')],prefix='IMP')
-  with st.container(border=True):
-   st.markdown('<div class="col-title">Planning decisions that guide the family</div><div class="col-desc">Not captured in the earlier modules. Leave a question unanswered if it is still undecided.</div>',unsafe_allow_html=True)
-   ca,cb=st.columns(2)
-   with ca:
-    pick('ctg_planned','Connective tissue graft (CTG) at implant placement?',YN('CTG'),'CTG performed in the same procedure as the implant placement, for lack of thickness or volume. It is not the same as increasing the vertical supracrestal tissue height (STH): record both goals and their measures separately.')
-    if r('ctg_planned')!='IMP-CTG-YES' and r('soft_thickness')=='SUR-STT-DEFICIENT':st.caption('Soft-tissue thickness was recorded as deficient: a CTG for thickness is suggested.')
-    elif r('ctg_planned') is None and (r('pro_ridge')=='PRO-RIDGE-DEFICIENT' or r('pro_margin')=='PRO-MARGIN-APICAL'):st.caption('The prosthetic assessment suggests that soft-tissue augmentation may be needed.')
-    if r('site')=='CASE-SITE-EXTRACT':pick('immediate_placement','Immediate placement at extraction?',YN('IMMPL'),'Placement in the extraction socket at the time of extraction (ITI Type 1).')
+  site_=tp_site_info()
+  height_=r('ridge_height')
+  width_=r('ridge_width')
+  st.markdown('#### Clinical summary · findings that affect treatment')
+  fcols=st.columns(4)
+  findings=[
+   ('SITE',', '.join(r('teeth',[]) or [])+' (FDI)',SITE.get(r('site'),'Site not characterized')),
+   ('AVAILABLE BONE',('H '+tp_fmt(height_)+' mm · W '+tp_fmt(width_)+' mm') if height_ is not None and width_ is not None else 'Measurements incomplete','Inter-root space: '+tp_fmt(r('md_bone'))+' mm'),
+   ('SOFT TISSUE','STH '+tp_fmt(r('supracrestal'))+' mm','Thickness: '+('deficient' if r('soft_thickness')=='SUR-STT-DEFICIENT' else 'adequate' if r('soft_thickness')=='SUR-STT-ADEQUATE' else 'unknown')),
+   ('MAIN CHALLENGE',('Bone deficiency' if tp_has_bone_defect() else 'Reduced posterior height' if site_['maxilla'] and site_['molar'] and height_ is not None and height_<REDUCED_HEIGHT_MM else 'Soft-tissue optimization' if tp_has_soft_defect() else 'Assessment incomplete' if any(r(k) is None for k in ('horizontal_defect','vertical_defect','facial_defect','soft_thickness','keratinized')) else 'No deficit documented'), '3D CBCT + restorative assessment required')
+  ]
+  for col_,(k_,v_,sub_) in zip(fcols,findings):
+   with col_:
+    st.markdown('<div class="tp-finding"><div class="k">'+escape(k_)+'</div><div class="v">'+escape(v_)+'</div><div class="s">'+escape(sub_)+'</div></div>',unsafe_allow_html=True)
+  st.markdown('')
+  with st.expander('Planning decisions · grafting, GBR and loading (edit)',expanded=any(r(k) is None for k in ('ctg_planned','gbr_approach','immediate_loading','sth_adequacy'))):
+   st.caption('These questions influence the two proposed pathways. Unanswered fields remain unknown; an unknown finding is never treated as adequate anatomy.')
+   cs,ct=st.columns(2)
+   yesno=lambda v:opts(v,[('YES','Yes',''),('NO','No','')],prefix='IMP')
+   with cs:
+    pick('ctg_planned','CTG simultaneously with implant placement?',yesno('CTG'),'CTG aims to change soft-tissue thickness/contour and does not necessarily increase vertical STH.')
+    pick('sth_adequacy','Is supracrestal tissue height appropriate for the intended platform?',opts('STH',[('YES','Adequate for the planned platform','Assessment of STH, emergence and proposed depth is favorable.'),('NO','Not adequate','STH/restorative tissue conditions need correction or Bone Level management.')],prefix='IMP'),'A clinician assessment; the app does not assume a universal STH cut-off from the measurement alone.')
+    if r('site')=='CASE-SITE-EXTRACT':pick('immediate_placement','Immediate placement in extraction socket?',yesno('IMMPL'),'Confirm intact/compromised socket, sufficient bone for anchorage and restoration-guided 3D position.')
     else:clear('immediate_placement')
-   with cb:
-    pick('gbr_approach','Regenerative approach',opts('GBR',[('NONE','No regeneration planned',''),('SIMULT','Simultaneous GBR','Regeneration at the time of implant placement, for a small localized defect when the 3D position and primary stability are achievable.'),('STAGED','Staged GBR (before the implant)','Reconstruction first for an extensive defect; the ridge and soft tissues are re-evaluated after healing.')],prefix='IMP'),'Timing of bone regeneration relative to implant placement. A localized defect with achievable position and stability may allow simultaneous GBR; an extensive one usually needs a staged approach.')
-    if r('gbr_approach')=='IMP-GBR-STAGED':pick('staged_status','Staged GBR status',opts('STG',[('PENDING','Not yet performed','Reconstruction still to be done; reassess the ridge and soft tissues after healing.'),('HEALED','Healed and re-evaluated','The Surgical Assessment answers describe the re-evaluated site.')],prefix='IMP'))
+   with ct:
+    pick('gbr_approach','Bone-regeneration approach under consideration',opts('GBR',[('NONE','No GBR planned',''),('SIMULT','Simultaneous GBR','Implant placement and localized bone regeneration in one intervention, only when all surgical conditions support it.'),('STAGED','Staged GBR before implant','Reconstruct first, reassess after healing and then choose implant design/dimensions.')],prefix='IMP'),'Select an intended approach to compare, not a permission to bypass constraints.')
+    if r('gbr_approach')=='IMP-GBR-STAGED':pick('staged_status','Status of staged GBR',opts('STG',[('PENDING','Not yet performed','Implant selection must be deferred.'),('HEALED','Healed and reevaluated','The anatomical measurements refer to the healed augmented site.')],prefix='IMP'))
     else:clear('staged_status')
-    pick('immediate_loading','Immediate provisionalization or loading proposed?',YN('IMMLD'),'Loading only after verifying torque/ISQ according to a validated protocol, absence of micromovement and occlusal control.')
-  sup=gbr_support()
-  if sup:
-   with st.container(border=True):
-    st.markdown('<div class="col-title">Simultaneous or staged regeneration</div><div class="col-desc">Orientative criteria, not an automatic indication. Answer what you have assessed.</div>',unsafe_allow_html=True)
-    cc1,cc2=st.columns(2)
+    pick('immediate_loading','Immediate provisionalization or loading planned?',yesno('IMMLD'),'A plan for loading does not establish primary stability; verify appropriate clinical thresholds and occlusal conditions.')
+  support_=gbr_support()
+  if support_:
+   with st.expander('GBR decision support · simultaneous vs staged',expanded=False):
+    st.caption('Defect size alone does not decide timing; morphology, positioning, stability and closure matter.')
+    ac,bc=st.columns(2)
     for i_,(k_,lab_,c_) in enumerate(GBR_CRITERIA):
-     with (cc1 if i_%2==0 else cc2):pick(k_,lab_,opts(c_,[('YES','Yes',''),('NO','No','')],prefix='IMP'))
-    sup=gbr_support()
-    for t_ in sup['notes']:st.write('• '+t_)
-    if sup['failed']:st.write('⚠️ Criterion not met: '+'; '.join(sup['failed'])+'.')
-    v_=sup['verdict']
-    if v_=='staged':st.write('‼️ Evaluate staged regeneration (reconstruct first, then re-evaluate the ridge and soft tissues). It is not recommended automatically from one number.')
-    elif v_=='selected':st.write('⚠️ Simultaneous GBR only in selected cases; consider a staged or deferred approach.')
-    elif v_=='simult':st.write('✅ Criteria met: simultaneous GBR is reasonable. In this CDSS it prioritizes Bone Level (BLT, BLC or BLX).')
-    else:st.write('ℹ️ Pending to conclude: '+', '.join((['defect size (augmentation or dehiscence height)'] if sup['size'] is None else [])+sup['pending'])+'.')
-    ga_=r('gbr_approach')
-    if ga_=='IMP-GBR-SIMULT' and v_ in ('staged','selected'):notice('Simultaneous GBR is selected, but the criteria suggest evaluating a staged approach.')
-    if ga_=='IMP-GBR-NONE':notice('A bone defect is recorded but no regeneration is planned: confirm this decision.')
-    st.caption('Reference: Yu, Saleh and Wang 2023 (1 to 3 mm favorable; 4 to 5 mm selected cases; 6 mm or more staged). A fully extraosseous 2 mm defect can be more complex than a contained 4 mm one. ITI 2023 recommends more than 1.5 mm of buccal bone at healed ridges and favors simultaneous regeneration of buccal dehiscences.')
-  level,reasons,missing=implant_level()
-  matched=implant_scenarios()
-  # --- tissue rule
-  with st.container(border=True):
-   if level=='BL':
-    st.markdown('#### Tissue rule · Bone Level prioritized')
-    st.write('✅ Reasons: '+', '.join(reasons)+'. Bone Level offers more flexibility to manage emergence, depth and peri-implant tissue during augmentation.')
-    st.write('⚠️ Specify the CTG goal (thickness or volume); do not assume a vertical STH increase. With GBR, confirm primary stability and closure and reassess staged versus simultaneous.')
-    st.write('‼️ Bone Level priority for simultaneous CTG or GBR is a rule agreed for this CDSS, not an absolute contraindication of the manufacturer for Tissue Level.')
-   elif level=='DEFER':
-    st.markdown('#### Tissue rule · Re-evaluate after staged GBR')
-    st.write('✅ After healing, re-evaluate the ridge and the soft tissues. Bone Level (BLT, BLC, BLX) or Tissue Level (TLC, TLX) can then be considered if the anatomy and the restoration allow it.')
-    st.write('⚠️ The options below are provisional: they assume the current site. Update Surgical Assessment and the status of the staged GBR once the ridge has healed.')
-   elif level=='TL':
-    st.markdown('#### Tissue rule · Tissue Level eligible (TLC or TLX)')
-    st.write('✅ Bone and tissues are adequate and no simultaneous regeneration is planned: transmucosal approach with the prosthetic connection away from the bone, if the position is restorable.')
-    st.write('⚠️ Validate cleansability, esthetics, shoulder level and vertical space. Bone Level remains valid when the prosthetic objectives favor it.')
-    st.write('‼️ Excluding Tissue Level when CTG/GBR is planned is a deliberate, conservative rule of this CDSS, not a universal contraindication.')
-   else:
-    st.markdown('#### Tissue rule · Not enough information yet')
-    st.write('⚠️ Tissue Level can be evaluated only after these are answered: '+', '.join(missing)+'. Meanwhile Bone Level candidates are shown as provisional.')
-  # --- main proposal
-  pool=[m for m in matched if m['lvl']==('TL' if level=='TL' else 'BL')]
-  narrow=[m for m in matched if m['name'].startswith('Narrow mesiodistal')]
-  if narrow:main=narrow[0]   # explicit narrow-space constraint: the Ø2.9 option exists only in BLT
-  elif pool:main=pool[0]
-  elif level=='TL' and matched:main=matched[0]   # no Tissue Level scenario fits (immediate placement, dense or soft bone, restricted apical anatomy): the matching Bone Level scenario leads
-  elif level=='TL':
-   immediacy=r('immediate_placement')=='IMP-IMMPL-YES' or r('immediate_loading')=='IMP-IMMLD-YES'
-   flt='Confirm shoulder position, mucosal height, emergence profile and cleansability.'
-   if r('esthetic')=='Yes':flt+=' Esthetic concern recorded: confirm that the transmucosal neck and the shoulder position are favorable; Bone Level remains valid.'
-   if r('site')!='CASE-SITE-HEALED':flt+=' TLC is described for healed ridges: confirm it for this site condition and timing.'
-   main=dict(name='No specific scenario matched',first='TLX' if immediacy else 'TLC',alts=('TLC' if immediacy else 'TLX')+'; Bone Level families if the prosthetic objectives favor them',why='Tissue Level is eligible: '+('TLX when primary stability or immediacy is more demanding.' if immediacy else 'TLC for a stable, healed site with no particular need for X.'),flt=flt)
-  else:main=dict(name='No specific scenario matched',first='BLC, BLT or BLX',alts='Choose with the tie-breakers below',why='All Bone Level families are valid candidates; differentiate them by primary-stability needs, bed type and loading protocol.',flt='Confirm anatomy, restorative platform and component availability.')
-  options_=implant_options(main)
-  dmax_,lmax_=size_ceiling()
-  if dmax_ is not None and dmax_<=0:notice('The measured space leaves no room for an implant with the bone margins (buccal '+format(BUCCAL_MM,'g')+' mm, palatal/lingual '+format(PALATAL_MM,'g')+' mm, '+format(PROX_MM,'g')+' mm to each adjacent root); review the plan.')
-  st.markdown('#### Treatment options'+('  (provisional)' if level in (None,'DEFER') else ''))
-  st.caption('Scenario: '+main['name']+'. Sizes are ceilings from your measures: width needed is the diameter + '+format(BUCCAL_MM+PALATAL_MM,'g')+' mm (buccal '+format(BUCCAL_MM,'g')+' + palatal/lingual '+format(PALATAL_MM,'g')+'); mesiodistal space needed is the diameter + '+format(2*PROX_MM,'g')+' mm; exact diameters and lengths will come from the Straumann USA SKU table.')
-  cols_=st.columns(len(options_)) if options_ else []
-  for col_,o_,tag_ in zip(cols_,options_,'AB'):
+     with (ac if i_%2==0 else bc):pick(k_,lab_,opts(c_,[('YES','Yes',''),('NO','No','')],prefix='IMP'))
+    support_=gbr_support()
+    for t_ in support_['notes']:st.write('• '+t_)
+    if support_['failed']:st.warning('Criteria not met: '+', '.join(support_['failed']))
+    st.caption('GBR screening: '+support_['verdict']+'. This is guidance, not a surgical clearance.')
+  st.markdown('#### Preliminary restorative decisions')
+  rc1,rc2=st.columns(2)
+  with rc1:
+   field('preview_retention',st.selectbox,'Preferred retention concept',default=None,options=['TP-RET-SCREW','TP-RET-SCREWMENT','TP-RET-CEMENT'],format_func=lambda x:{'TP-RET-SCREW':'Screw-retained','TP-RET-SCREWMENT':'Screw-cement retained / screwmentable','TP-RET-CEMENT':'Cement-retained'}[x],index=None,placeholder='To be evaluated')
+  with rc2:
+   field('preview_access',st.selectbox,'Screw-access path',default=None,options=['TP-ACC-STRAIGHT','TP-ACC-ANGLED'],format_func=lambda x:{'TP-ACC-STRAIGHT':'Straight screw channel','TP-ACC-ANGLED':'Angled screw channel'}[x],index=None,placeholder='Not yet assessed')
+  result_=tp_build_plans()
+  if result_['level']=='TL':
+   st.info('Tissue Level is an option under the current CDSS rules, subject to appropriate shoulder position, soft-tissue height, bone volume and prosthetic access. Bone Level remains possible.')
+  elif result_['level']=='BL':
+   st.info('Bone Level is prioritized because of the tissue/defect findings or anticipated simultaneous grafting. This is a local CDSS preference, not an absolute manufacturer contraindication to Tissue Level.')
+  elif result_['level']=='DEFER':
+   st.warning('Staged reconstruction has not been completed/re-evaluated. Implant families and sizes remain provisional until updated anatomical findings are available.')
+  else:
+   st.warning('Bone/Tissue Level cannot be settled yet. Missing findings: '+', '.join(result_['missing'])+'. Proposals below are provisional.')
+  st.markdown('#### Compare treatment pathways')
+  pcs=st.columns(2,gap='medium')
+  for col_,plan_ in zip(pcs,result_['plans']):
    with col_:
     with st.container(border=True):
-     st.markdown('<div class="col-title">Option '+tag_+' · '+FAMILIES[o_['code']]+'</div><div class="col-desc">'+o_['role']+'</div>',unsafe_allow_html=True)
-     st.write('**Implant type:** '+FAMILIES[o_['code']])
-     st.write('**Diameter:** '+o_['dia'])
-     st.write('**Length:** '+o_['length'])
-     st.write('**Design:** '+o_['macro'])
-  cols2_=st.columns(len(options_)) if options_ else []
-  for col_,o_,tag_ in zip(cols2_,options_,'AB'):
-   with col_:
-    with st.container(border=True):
-     st.markdown('**Considerations · Option '+tag_+'**')
-     for ic_,t_ in o_['cons']:st.write(ic_+' '+t_)
-  st_notes_=soft_tissue_notes()
-  if st_notes_:
-   with st.container(border=True):
-    st.markdown('**Soft-tissue plan (applies to both options)**')
-    for t_ in st_notes_:st.write('‼️ '+t_)
-  others=[m for m in matched if m is not main]
-  if others:
-   with st.expander('Other scenarios that also apply',expanded=False):
-    for m in others:
-     st.markdown('**'+m['first']+'** · '+m['name']+' · '+('Bone Level' if m['lvl']=='BL' else 'Tissue Level'))
-     st.write('Alternatives: '+m['alts'])
-     st.write('✅ '+m['why'])
-     st.write('⚠️ '+m['flt'])
-  if reduced_height():
-   with st.container(border=True):
-    st.markdown('#### Reduced posterior bone height · evaluate alternatives and the real available length')
-    st.write('✅ Short BLX/TLX if indicated, or bone augmentation. The availability of short implants does not replace the biomechanical analysis.')
-    st.write('‼️ Do not automatically recommend 4–6 mm without verifying the USA SKU, the indication, the support and the risks.')
-  # --- missing data
-  gaps=list(missing)
-  if r('site')=='CASE-SITE-EXTRACT' and r('immediate_placement') is None:gaps.append('Immediate placement decision')
-  if r('immediate_loading') is None:gaps.append('Loading plan')
-  if r('bone_quality') is None:gaps.append('Bone quality D1 to D4 (Surgical Assessment)')
-  gaps=list(dict.fromkeys(gaps))
-  if gaps:st.info('Missing data that would refine this proposal: '+', '.join(gaps)+'.')
-  st.caption('Not captured by the app yet: apical/palatal anchorage for immediate placement.')
-  st.caption('"Preferred" means a design recommendation of this CDSS, not an exclusive manufacturer indication. The final choice requires the current IFU of the SKU, prosthetic compatibility, stability, anatomical analysis and clinical judgment.')
-  with st.expander('Tie-breakers between designs',expanded=False):
-   for cmp_,a_,b_ in TIEBREAKERS:st.markdown(f'**{cmp_}**\n\n- {a_}\n- {b_}')
-  with st.expander('Design profile of each family',expanded=False):
-   for code,fam in FAMILIES.items():
-    macro,strength,when,caution=PROFILES[code]
-    st.markdown(f'**{fam}**\n\n- Macrogeometry and connection: {macro}\n- Clinical strength: {strength}\n- Especially reasonable when: {when}\n- Main precaution: {caution}')
-   st.caption('iEXCEL shares the internal TorcFit connection, but components are selected by platform and Bone/Tissue Level version. BLT uses CrossFit and does NOT share that prosthetic ecosystem.')
-  with st.expander('Safety controls and interpretive limits',expanded=False):
-   for t in SAFETY_NOTES:st.markdown('- '+t)
-  with st.container(border=True):
-   st.markdown('#### Clinician decision')
-   order_=[o_['code'] for o_ in options_]+[c for c in FAMILIES if c not in [o_['code'] for o_ in options_]]
-   tags_={o_['code']:'Option '+t_+' · ' for o_,t_ in zip(options_,'AB')}
-   field('implant_family',st.selectbox,'Option selected by the clinician',default=None,options=order_,format_func=lambda c:tags_.get(c,'Other · ')+FAMILIES[c],index=None,placeholder='Select…',help='The proposal does not decide for the clinician. The selected family is carried to the summary and the next modules.')
-   field('implant_reason',st.text_area,'Reason for the choice (optional)',default='')
+     klass='tp-chip' if plan_['key']=='A' else 'tp-chip alt'
+     st.markdown('<div class="'+klass+'">OPTION '+plan_['key']+'</div><div class="tp-head"><div class="tp-title">'+escape(plan_['title'])+'</div><div class="tp-sub">'+escape(plan_['subtitle'])+'</div></div>',unsafe_allow_html=True)
+     st.markdown('<div class="tp-slab"><h4>🩺 Surgical approach</h4><p>'+escape(plan_['surgery'])+'</p></div>',unsafe_allow_html=True)
+     s_=plan_['sizes']
+     dtext_=' | '.join('Ø'+tp_fmt(x) for x in s_['diameters'])+' mm' if s_['diameters'] else 'Pending measurements / no compatible diameter'
+     ltext_=', '.join(str(x) for x in s_['lengths'])+' mm' if s_['lengths'] else 'Pending anatomy / no compatible length'
+     st.markdown('<div class="tp-slab"><h4>🦷 Implant selection</h4><p><b>Design:</b> '+escape(FAMILIES[plan_['family']])+'</p><p><b>Example:</b> '+escape(plan_['size_display'])+'</p><p><b>Candidate diameters:</b> '+escape(dtext_)+'</p><p><b>Lengths for screened diameter:</b> '+escape(ltext_)+'</p></div>',unsafe_allow_html=True)
+     rt_,ac_=tp_restoration_text()
+     st.markdown('<div class="tp-slab"><h4>⚙️ Preliminary restorative approach</h4><p>'+escape(rt_)+'</p><p>'+escape(ac_)+'</p></div>',unsafe_allow_html=True)
+     st.markdown('<div class="tp-state"><b>Feasibility:</b> '+escape(plan_['status'])+'</div>',unsafe_allow_html=True)
+     with st.expander('Benefits, limitations & clinical rationale'):
+      st.markdown('**Potential benefit:** '+plan_['pros'])
+      st.markdown('**Key limitations:** '+plan_['limits'])
+      st.markdown('**Design considerations:** '+PROFILES[plan_['family']][1])
+      st.caption(s_['reason'])
+  st.markdown('#### Patient-centered comparison')
+  a_,b_=result_['plans']
+  import pandas as pd
+  comp_=pd.DataFrame([
+   {'Criterion':'Surgical pathway','Option A':a_['title'],'Option B':b_['title']},
+   {'Criterion':'Potential advantage','Option A':a_['pros'],'Option B':b_['pros']},
+   {'Criterion':'Implant design','Option A':FAMILIES[a_['family']],'Option B':FAMILIES[b_['family']]},
+   {'Criterion':'Dimensional screening','Option A':a_['size_display'],'Option B':b_['size_display']},
+   {'Criterion':'Current limitations','Option A':a_['limits'],'Option B':b_['limits']},
+  ])
+  st.dataframe(comp_,hide_index=True,use_container_width=True)
+  priorities_=[NEEDS[n] for n in (r('needs',[]) or []) if n in NEEDS]
+  if priorities_:
+   st.caption('Patient priorities to discuss: '+', '.join(priorities_)+'. Compare only clinically feasible plans; preferences do not supersede safety constraints.')
+  else:st.caption('Patient priorities are not recorded. Neither option is ranked automatically.')
+  st.markdown('#### Clinician review and plan selection')
+  st.caption('No pathway is automatically prescribed or approved. Choose a working strategy for review, or leave the decision open.')
+  choice_=field('treatment_path',st.selectbox,'Treatment pathway to investigate',default=None,options=['A','B'],format_func=lambda v:'Option '+v+' · '+result_['plans'][0 if v=='A' else 1]['title'],index=None,placeholder='No decision yet')
+  family_codes_=[p['family'] for p in result_['plans']]
+  other_codes_=[c for c in FAMILIES if c not in family_codes_]
+  field('implant_family',st.selectbox,'Implant design selected (clinician editable)',default=None,options=list(dict.fromkeys(family_codes_+other_codes_)),format_func=lambda c:FAMILIES[c],index=None,placeholder='Select only after review')
+  if choice_ in ('A','B'):
+   requested_family_=result_['plans'][0 if choice_=='A' else 1]['family']
+   if st.button('Use implant family from selected pathway',key='apply_selected_path_family'):
+    record['implant_family']=requested_family_
+    st.session_state.pop('ui_implant_family',None)
+    st.rerun()
+  field('implant_reason',st.text_area,'Reason for the treatment plan and design',default='',placeholder='Clinical rationale, limitations and why this option is appropriate…')
+  st.download_button('⬇ Export current treatment comparison (HTML)',data=tp_export_html(result_),file_name='implant_treatment_comparison.html',mime='text/html',help='Creates a local summary. The report may contain patient information; store securely.')
+  with st.expander('Methodology, dimension-screening rules & safety limits',expanded=False):
+   st.markdown('**Working catalog:** BLC, BLX, BLT, TLC and TLX; each diameter is paired only with the lengths in the clinician-edited project matrix. Stock and IFU/SKU eligibility have not been independently verified.')
+   st.markdown('**Initial diameter ceiling:** minimum of (ridge width − facial wall − 1.0 mm lingual wall) and (interradicular space − 3.0 mm). Facial screen uses 2.0 mm for esthetic/anterior sites and 1.6 mm elsewhere. The software must still review shoulder/platform size, cross-sectional contour and complete CBCT geometry.')
+   st.markdown('**Initial length ceiling:** residual bone height − 2.0 mm, inherited from the original app as a provisional conservative screen. It is NOT a universal fixed anatomical safety margin and cannot replace site-specific 3D planning, drill-tip clearance or the actual manufacturer-approved protocol.')
+   st.markdown('**Short vs sinus:** shown only as a comparison concept for a posterior maxillary molar with reduced native bone height. A short implant is not considered feasible if no listed length passes the conservative initial screen; sinus pathology demands separate review.')
+   for n_ in SAFETY_NOTES:st.markdown('- '+n_)
   references(4)
 
 elif step==5:
- st.markdown('### Surgical pathways · patient-centered comparison')
+ st.markdown('### Surgical Planning · selected treatment pathway')
  patient_context()
- option('Option A · Short implant concept','May limit surgical intervention in carefully selected posterior sites.','Evaluate primary stability, implant dimensions, restorative load and long-term evidence.','No automatic clearance from nominal bone height.')
- option('Option B · Sinus augmentation + longer implant','May permit additional implant length where anatomically justified.','Compare treatment burden, healing timeline, sinus anatomy and morbidity.','Sinus disease and anatomical limitations require separate assessment.')
- option('Option C · Horizontal regeneration / adjusted axis','Allows comparison of prosthetically feasible site-development strategies.','Check graft need, emergence and restorative component compatibility.','An angled component cannot compensate for unsafe 3D implant positioning.')
- if r('sinus') in ('SUR-SINUS-POSSIBLE','SUR-SINUS-TREATED'):notice('Sinus finding needs appropriate evaluation before considering sinus intervention.')
- choose('surgical_option','Surgical pathway to investigate',['Undecided','Short implant concept','Sinus augmentation concept','Horizontal augmentation / altered axis','Compare multiple options'])
- references(5)
+ if r('case_type')=='CASE-TYPE-SINGLE' and r('teeth') and r('site') is not None:
+  result_=tp_build_plans()
+  selected_=r('treatment_path')
+  if selected_ in ('A','B'):
+   p_=result_['plans'][0 if selected_=='A' else 1]
+   st.markdown('#### Working plan · Option '+selected_+' — '+p_['title'])
+   st.info(p_['surgery'])
+   st.caption('Current status: '+p_['status']+'. This is a working pathway and not a clinical clearance.')
+   if p_['post']:st.warning('Re-assess after augmentation/healing before specifying final implant dimensions.')
+  else:
+   st.warning('No treatment pathway has been selected yet. Compare Options A and B in Step 05 before finalizing the surgical sequence.')
+  with st.container(border=True):
+   st.markdown('#### Record the clinician-approved surgical sequence')
+   choose('surgical_option','Surgical approach',['Undecided','Direct placement / no augmentation','CTG simultaneous to implant placement','GBR simultaneous to implant placement','GBR staged prior to implant','Sinus floor elevation (transcrestal)','Sinus floor elevation (lateral)','Soft-tissue augmentation staged','Combination / individualized protocol'])
+   field('surgical_notes',st.text_area,'Procedure rationale, sequence and anatomical safeguards',default='',placeholder='Site-specific plan, contraindications, need for stages, primary stability, closure…')
+   field('surgical_reassessment',st.text_area,'Required reassessment before surgery',default='',placeholder='CBCT review, sinus assessment, tissue status, anatomical structures, IFU checks…')
+  with st.expander('Surgical alternatives to compare · case-sensitive guidance',expanded=False):
+   if result_['mode']=='sinus':
+    st.markdown('**Short implant versus sinus elevation:** confirm a commercially valid short length, native bone support, crown/implant relationship and sinus conditions. An option with no valid screened implant length is not cleared.')
+   elif result_['mode'] in ('gbr','staged_pending'):
+    st.markdown('**Simultaneous versus staged GBR:** evaluate restoration-guided 3D positioning, primary stability, defect containment, graft stabilization, closure and the need for horizontal/vertical gain.')
+   elif result_['mode']=='soft':
+    st.markdown('**Simultaneous versus staged tissue augmentation:** distinguish CTG for soft-tissue thickness from FGG or apically positioned flap for keratinized tissue, and assess the independent goal of STH.')
+   else:
+    st.markdown('**No additional procedure is automatically proposed.** Revisit clinical findings if the 3D plan cannot satisfy positioning, tissue and stability requirements.')
+  references(5)
+ else:st.info('Complete the single-tooth site and clinical data before finalizing a surgical plan.')
 
 elif step==6:
- st.markdown('### Restorative alternatives')
+ st.markdown('### Restorative Planning · selected pathway')
  patient_context()
+ selected_=r('treatment_path')
+ if selected_ in ('A','B') and r('case_type')=='CASE-TYPE-SINGLE':
+  chosen_=tp_build_plans()['plans'][0 if selected_=='A' else 1]
+  st.info('Working Option '+selected_+': '+chosen_['title']+' · '+FAMILIES[chosen_['family']]+'. Final components must be compatible with the selected platform and positioning.')
+ else:st.caption('The implant and its working strategy can be carried over from Step 05 after selection.')
+ preview_retention_,preview_access_=tp_restoration_text()
+ st.caption('Preliminary idea from Step 05: '+preview_retention_+' '+preview_access_)
  left,right=st.columns(2)
- with left:option('Straight screw access','Retrievability can support maintenance where geometry allows.','Verify restorative dimensions, tissue profile and access direction.')
- with right:option('Angled screw access','May support a screw-retained solution when an angulated channel is compatible.','Verify platform, manufacturer-approved correction range and restorative thickness.','Does not correct an unsafe implant trajectory.')
- choose('retention','Retention',['Undecided','Screw-retained','Cement-retained','Compare both'])
+ with left:option('Straight screw access','Retrievability can support maintenance when implant trajectory and emergence allow.','Verify restorative space, axis, tissue profile and correct platform components.')
+ with right:option('Angled screw access','A manufacturer-approved angled channel can sometimes preserve screw retention despite off-axis access.','Confirm the exact implant platform, component range and restorative space; it cannot compensate for unsafe implant positioning.')
+ choose('retention','Final retention concept',['Undecided','Screw-retained','Screw-cement retained (extraoral cementation)','Cement-retained','Compare both'])
+ choose('abutment_choice','Abutment or screw-channel configuration',['Undecided','Straight abutment / screw channel','Angled screw channel (if compatible)','Angled abutment (evaluate separately)','Custom abutment'])
  choose('material','Crown material',['Undecided','Monolithic zirconia','Metal-ceramic','Other'])
  choose('provisional','Provisional approach',['Undecided','No provisional','Interim prosthesis','Implant-supported provisional if feasible'])
+ field('restorative_rationale',st.text_area,'Restorative rationale and limitations',default='',placeholder='Screw access, emergence, retrievability, cement risks, restorative space, cleansability…')
  if r('pro_para') in ('PRO-PARA-SELF','PRO-PARA-SUSPECTED','PRO-PARA-BOTH'):notice('Reassess occlusal loading and protective strategies.')
  references(6)
 
@@ -813,6 +1007,7 @@ else:
  st.write('**Teeth (FDI):**',(', '.join(r('teeth',[])) or 'Not selected') if r('case_type')!='CASE-TYPE-EDENT' else r('arch','Unknown'))
  st.write('**Esthetic concern:**',r('esthetic','Not entered'))
  st.write('**Current site:**',SITE.get(r('site'),'Not entered'))
+ st.write('**Working treatment strategy:**',r('treatment_path') or 'No plan selected')
  st.write('**Implant / surgical / restorative:**',FAMILIES.get(r('implant_family'),'Undecided'),'·',r('surgical_option','Undecided'),'·',r('retention','Undecided'))
  st.write('**Maintenance:**',r('maintenance_plan','Not assigned'))
  st.caption('The summary represents the current working plan, not a treatment prescription or an approved clinical recommendation.')
