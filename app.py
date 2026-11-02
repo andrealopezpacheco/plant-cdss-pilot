@@ -263,9 +263,9 @@ def implant_level():
  reasons,missing=[],[]
  ctg,gbr=r('ctg_planned'),r('gbr_approach')
  if ctg=='IMP-CTG-YES':reasons.append('Connective tissue graft at implant placement')
- elif ctg is None:missing.append('CTG decision')
+ elif ctg is None and tp_procedure_recommendations()['CTG']['status']=='pending':missing.append('CTG assessment')
  if gbr=='IMP-GBR-SIMULT':reasons.append('Simultaneous GBR')
- elif gbr is None:missing.append('Regenerative approach')
+ elif gbr is None and tp_procedure_recommendations()['GBR']['status']=='pending':missing.append('Bone-regeneration assessment')
  elif gbr=='IMP-GBR-STAGED':
   stt=r('staged_status')
   if stt is None:missing.append('Staged GBR status')
@@ -280,12 +280,21 @@ def implant_level():
    v=r(key)
    if v in bad:reasons.append(lab+' present or suspected'+tail)
    elif v is None:missing.append(lab+' (Surgical Assessment)')
+  if r('supracrestal') is not None and r('supracrestal')<2.0:
+   reasons.append('STH under 2 mm: consider soft-tissue optimization and prefer Bone Level under CDSS policy')
+  elif r('supracrestal') is None:missing.append('STH measurement')
+  if tp_procedure_recommendations()['GBR']['status']=='suggested' and gbr!='IMP-GBR-STAGED':
+   reasons.append('Bone regeneration assessment triggered by dimensional or bone-defect findings')
+ if gbr=='IMP-GBR-STAGED' and r('supracrestal') is not None and r('supracrestal')<2.0:
+  reasons.append('STH below 2 mm after staged GBR: soft-tissue management should be evaluated before Tissue Level selection')
  for key,bad,lab,txt in (('soft_thickness','SUR-STT-DEFICIENT','Soft-tissue thickness','Soft-tissue thickness deficient'),('keratinized','SUR-KT-DEFICIENT','Keratinized tissue','Keratinized tissue band under 2 mm')):
   v=r(key)
   if v==bad:reasons.append(txt)
   elif v is None:missing.append(lab+' (Surgical Assessment)')
  if r('sth_adequacy')=='IMP-STH-NO':reasons.append('STH judged inadequate for the intended implant platform')
- elif r('sth_adequacy') is None:missing.append('STH suitability for the restorative platform')
+ elif r('sth_adequacy') is None and r('supracrestal') is None:missing.append('STH suitability for the restorative platform')
+ if r('ridge_width') is None:missing.append('Ridge width (Surgical Assessment)')
+ if r('md_bone') is None:missing.append('Mesiodistal interradicular space (Surgical Assessment)')
  if reasons:return 'BL',reasons,missing
  return (None if missing else 'TL'),reasons,missing
 
@@ -293,7 +302,8 @@ GBR_CRITERIA=(('gbrc_pos','3D implant position is prosthetically adequate','GBRC
 
 def gbr_support():
  # Guidance for simultaneous vs staged GBR (Yu, Saleh, Wang 2023; Jung 2017). Orientative, never an automatic indication.
- relevant=r('horizontal_defect') in ('SUR-HDEF-PRESENT','SUR-HDEF-SUSPECTED') or r('facial_defect') in (_DEH,_FEN) or r('gbr_approach') in ('IMP-GBR-SIMULT','IMP-GBR-STAGED')
+ rec_=tp_procedure_recommendations()['GBR']
+ relevant=(rec_['status']=='suggested' and not rec_['md_only_conflict']) or r('gbr_approach') in ('IMP-GBR-SIMULT','IMP-GBR-STAGED')
  if r('gbr_approach')=='IMP-GBR-STAGED' and r('staged_status')=='IMP-STG-HEALED':return None   # already reconstructed and re-evaluated
  if not relevant:return None
  aug,deh=r('h_aug'),r('deh_height')
@@ -477,19 +487,86 @@ def tp_site_info():
  upper_lateral=pos=='2' and maxilla
  if lower_incisor or upper_lateral: return dict(anterior=True,maxilla=maxilla,molar=False,posterior=False,kind='narrow incisor',target=3.3,low=2.9,high=3.5)
  if pos=='1' and maxilla:return dict(anterior=True,maxilla=True,molar=False,posterior=False,kind='upper central incisor',target=3.75,low=3.3,high=4.0)
- if pos in '345':return dict(anterior=pos=='3',maxilla=maxilla,molar=False,posterior=pos in '45',kind='canine or premolar',target=3.75,low=3.3,high=4.0)
+ if pos=='3':return dict(anterior=True,maxilla=maxilla,molar=False,posterior=False,kind='canine',target=3.75,low=3.3,high=4.0)
+ if pos in '45':return dict(anterior=False,maxilla=maxilla,molar=False,posterior=True,kind='premolar',target=4.0,low=3.75,high=4.0)
  if pos in '678':return dict(anterior=False,maxilla=maxilla,molar=True,posterior=True,kind='molar',target=4.5,low=3.75,high=5.5)
  return dict(anterior=False,maxilla=maxilla,molar=False,posterior=False,kind=None,target=None,low=None,high=None)
 
+
+def tp_procedure_recommendations():
+ """Screening prompts derived from recorded findings, not a treatment prescription.
+
+ Unknowns are explicit. Favor clinician review over falsely labeling an
+ unmeasured or suspected site as healthy.
+ """
+ info=tp_site_info()
+ sth=r('supracrestal')
+ thickness=r('soft_thickness')
+ kt=r('keratinized')
+ # STH <2.0 is a project-specific review trigger, NOT a universal CTG indication.
+ ctg_why=[]
+ ctg_missing=[]
+ if sth is not None and sth<2.0:
+  ctg_why.append(f'Supracrestal tissue height {tp_fmt(sth)} mm (<2.0 mm project review threshold): assess a vertical soft-tissue augmentation objective.')
+ elif sth is None:ctg_missing.append('Supracrestal tissue height')
+ if thickness=='SUR-STT-DEFICIENT':ctg_why.append('Clinician reports inadequate mucosal thickness/volume.')
+ elif thickness is None:ctg_missing.append('Soft-tissue thickness/volume assessment')
+ ctg_status='suggested' if ctg_why else ('pending' if ctg_missing else 'not_indicated')
+ ctg=dict(status=ctg_status,why=ctg_why,missing=ctg_missing,procedure='CTG / soft-tissue augmentation review',
+          note='CTG can increase tissue volume; a predictable increase in vertical STH is not guaranteed. Confirm technique and objective clinically.')
+
+ fgg_why=[]
+ fgg_missing=[]
+ if kt=='SUR-KT-DEFICIENT':fgg_why.append('Keratinized mucosa is reported insufficient (<2 mm category).')
+ elif kt is None:fgg_missing.append('Keratinized mucosa assessment')
+ fgg_status='suggested' if fgg_why else ('pending' if fgg_missing else 'not_indicated')
+ fgg=dict(status=fgg_status,why=fgg_why,missing=fgg_missing,procedure='FGG / keratinized-tissue augmentation review',
+          note='FGG is one option for increasing keratinized mucosa; esthetic zone, plaque control, symptoms and alternative techniques matter.')
+
+ # Width is measured relative to prosthetically correct position. For a single
+ # tooth, mesiodistal space is assumed to be bounded by adjacent natural roots.
+ min_d=info['low']
+ w,md=r('ridge_width'),r('md_bone')
+ gbr_why=[]
+ gbr_missing=[]
+ if min_d is None:gbr_missing.append('Single-tooth site and tooth type')
+ else:
+  width_req=min_d+1.5+1.0
+  md_req=min_d+1.5+1.5
+  if w is None:gbr_missing.append('Ridge width measured at the planned implant position')
+  elif w+1e-8<width_req:
+   gbr_why.append(f'Ridge width {tp_fmt(w)} mm < {tp_fmt(width_req)} mm needed for Ø{tp_fmt(min_d)} (vestibular 1.5 + palatal/lingual 1.0 mm).')
+  if md is None:gbr_missing.append('Mesiodistal space between adjacent roots')
+  elif md+1e-8<md_req:
+   gbr_why.append(f'Interradicular width {tp_fmt(md)} mm < {tp_fmt(md_req)} mm needed for Ø{tp_fmt(min_d)} (1.5 mm mesial + 1.5 mm distal). GBR alone does not increase root-to-root space: evaluate root positions, orthodontic/prosthetic alternatives or another eligible implant size.')
+ for key,bad,label in (
+  ('horizontal_defect',('SUR-HDEF-PRESENT',),'Clinician reports a horizontal bone deficiency.'),
+  ('vertical_defect',('SUR-VDEF-PRESENT',),'Clinician reports a vertical bone deficiency.'),
+  ('facial_defect',(_DEH,_FEN),'Clinician reports an anticipated dehiscence or fenestration.'),
+ ):
+  value=r(key)
+  if value in bad:gbr_why.append(label)
+  elif value in ('SUR-HDEF-SUSPECTED','SUR-VDEF-SUSPECTED'):
+   gbr_why.append(label.replace('reports','suspects').replace('a horizontal','a possible horizontal').replace('a vertical','a possible vertical'))
+  elif value is None:gbr_missing.append(key.replace('_',' ')+' assessment')
+ status='suggested' if gbr_why else ('pending' if gbr_missing else 'not_indicated')
+ gbr=dict(status=status,why=gbr_why,missing=gbr_missing,procedure='GBR / bone-defect treatment assessment',
+          note='A dimensional deficit triggers bone/space planning review, not automatic GBR. A narrow interradicular gap cannot be widened with GBR alone. Confirm CBCT 3D position, defect morphology, stability and restorative alternatives.',
+          min_d=min_d,required_width=(min_d+2.5 if min_d is not None else None),required_md=(min_d+3.0 if min_d is not None else None),
+          preferred_diameter=(4.0 if info['molar'] else None),
+          md_only_conflict=(min_d is not None and md is not None and md+1e-8<min_d+3.0
+                            and (w is None or w+1e-8>=min_d+2.5)
+                            and r('horizontal_defect')=='SUR-HDEF-NONE'
+                            and r('vertical_defect')=='SUR-VDEF-NONE'
+                            and r('facial_defect')=='SUR-FACIAL-NONE'))
+ return {'CTG':ctg,'FGG':fgg,'GBR':gbr}
+
 def tp_has_bone_defect():
- return (r('horizontal_defect') in ('SUR-HDEF-PRESENT','SUR-HDEF-SUSPECTED')
-  or r('vertical_defect') in ('SUR-VDEF-PRESENT','SUR-VDEF-SUSPECTED')
-  or r('facial_defect') in (_DEH,_FEN))
+ return tp_procedure_recommendations()['GBR']['status']=='suggested'
 
 def tp_has_soft_defect():
- return (r('soft_thickness')=='SUR-STT-DEFICIENT'
-  or r('keratinized')=='SUR-KT-DEFICIENT'
-  or r('sth_adequacy')=='IMP-STH-NO')
+ recs=tp_procedure_recommendations()
+ return recs['CTG']['status']=='suggested' or recs['FGG']['status']=='suggested' or r('sth_adequacy')=='IMP-STH-NO'
 
 def tp_family_pair(level):
  info=tp_site_info()
@@ -507,8 +584,9 @@ def tp_sizes(family,post_augmentation=False,short_only=False):
  w,md,h=r('ridge_width'),r('md_bone'),r('ridge_height')
  # Avoid implying that an unmeasured dimension is adequate.
  dims_known=w is not None and md is not None
- # For esthetic zone, screen for 2 mm facial bone; elsewhere use 1.6 (>1.5 mm).
- facial=2.0 if r('esthetic')=='Yes' or info['anterior'] else 1.6
+ # User-defined minimum is 1.5 mm buccal; ~2 mm remains a preferred esthetic target.
+ # The minimal threshold is not a surgical clearance, especially in thin facial cortical bone.
+ facial=1.5
  max_d=min(w-facial-PALATAL_MM,md-2*PROX_MM) if dims_known else None
  all_d=IMPLANT_CATALOG[family]
  diameters=[d for d in all_d if (info['low'] is None or info['low']<=d<=info['high']) and (max_d is None or d<=max_d)]
@@ -552,8 +630,10 @@ def tp_build_plans():
  gbr_case=tp_has_bone_defect() or r('gbr_approach')=='IMP-GBR-SIMULT' or (r('gbr_approach')=='IMP-GBR-STAGED' and r('staged_status')!='IMP-STG-HEALED')
  soft_case=tp_has_soft_defect() or r('ctg_planned')=='IMP-CTG-YES'
  staged_pending=(r('gbr_approach')=='IMP-GBR-STAGED' and r('staged_status')!='IMP-STG-HEALED')
+ space_only=tp_procedure_recommendations()['GBR']['md_only_conflict'] and r('gbr_approach') not in ('IMP-GBR-SIMULT','IMP-GBR-STAGED')
  mode='routine'
  if staged_pending:mode='staged_pending'
+ elif space_only:mode='space'
  elif gbr_case:mode='gbr'
  elif sinus_case:mode='sinus'
  elif soft_case:mode='soft'
@@ -567,6 +647,9 @@ def tp_build_plans():
   # Conservative rule for possible simultaneous sinus augmentation: Bone Level.
   # Tissue Level can be reconsidered after staged healing and re-evaluation.
   if b['family'].startswith('IMP-FAM-T'):b['family']='IMP-FAM-BLC'
+ elif mode=='space':
+  a.update(title='Interradicular Space Correction',subtitle='Implant placement deferred until the root-to-root constraint is resolved',surgery='Evaluate space management, neighboring root positions, orthodontic or prosthetic alternatives before any implant osteotomy. GBR alone cannot increase the distance between natural roots.',post=True,pros='Addresses the actual spatial limitation rather than adding bone unnecessarily.',limits='No diameter meeting the site-specific minimum can currently satisfy 1.5 mm on both adjacent roots.')
+  b.update(title='Alternative Restorative Strategy',subtitle='Explore non-implant or revised restoration concepts',surgery='Reassess the planned restorative design and a revised 3D position. Only reconsider a smaller implant if its site-specific IFU indication and biomechanics allow it; no implant is dimensionally cleared at present.',post=True,pros='Avoids mistakenly describing a root-space problem as a bone-volume defect treatable by GBR.',limits='Requires clinical review and new or verified interradicular dimensions.')
  elif mode=='gbr':
   a.update(title='Simultaneous GBR',subtitle='Implant and localized augmentation in one intervention',surgery='Consider simultaneous GBR only if prosthetically correct 3D placement, primary stability, graft stabilization and tension-free soft-tissue closure are achievable.',pros='May avoid a separate reconstruction stage for a suitably contained/localized defect.',limits='Not appropriate solely because the defect appears small: morphology and stability govern feasibility.')
   b.update(title='Staged Bone Regeneration',subtitle='Reconstruct first; remeasure after healing',surgery='Perform staged ridge augmentation when the defect or inability to achieve safe 3D placement/stability calls for site development.',post=True,pros='Allows reconstruction and reassessment before implant selection.',limits='Additional intervention/healing time; final size and platform cannot be confirmed until reassessment.')
@@ -574,7 +657,10 @@ def tp_build_plans():
   if first.startswith('IMP-FAM-T'):a['family']='IMP-FAM-BLC'
   if second.startswith('IMP-FAM-T'):b['family']='IMP-FAM-BLT'
  elif mode=='soft':
-  a.update(title='Simultaneous Soft-tissue Augmentation',subtitle='Manage the deficit during implant placement',surgery='If increased mucosal thickness/volume is indicated, assess CTG at placement; for insufficient keratinized tissue, separately assess FGG or an apically positioned flap.',pros='May address the soft-tissue objective during the implant intervention.',limits='CTG does not necessarily increase vertical STH. Tissue goal, donor-site morbidity and healing must be considered.')
+  recs=tp_procedure_recommendations()
+  target_text=(' Consider CTG-based augmentation for STH <2 mm or inadequate mucosal volume; assess the vertical gain objective rather than promising it.' if recs['CTG']['status']=='suggested' else '')
+  kt_text=(' Consider FGG or a suitable alternative for deficient keratinized tissue.' if recs['FGG']['status']=='suggested' else '')
+  a.update(title='Simultaneous Soft-tissue Augmentation',subtitle='Manage the documented deficit during implant placement',surgery='Assess soft-tissue augmentation at implant placement.'+target_text+kt_text,pros='May address the soft-tissue objective during the implant intervention.',limits='CTG does not reliably guarantee increased vertical STH. FGG and CTG have different primary objectives; technique and timing require clinical judgment.')
   b.update(title='Staged Soft-tissue Optimization',subtitle='Augment tissue and re-evaluate the implant site',surgery='Consider a staged soft-tissue procedure if adequate tissues or an appropriate restorative platform cannot be achieved at placement.',post=True,pros='Allows tissue stability and the definitive implant level to be reassessed.',limits='Extra surgical phase; Tissue Level can be reconsidered only if the final tissue and bone conditions are favorable.')
   if first.startswith('IMP-FAM-T'):a['family']='IMP-FAM-BLC'
   if second.startswith('IMP-FAM-T'):b['family']='IMP-FAM-BLT'
@@ -585,8 +671,11 @@ def tp_build_plans():
   a.update(title='Direct Placement Strategy',subtitle='No additional regeneration if truly unnecessary',surgery='Assess direct placement within the existing ridge; confirm primary stability, 3D restoration-guided position and soft-tissue adequacy.',pros='Can avoid augmentation if sufficient bone and tissues are confirmed.',limits='Do not treat incomplete tissue, bone or sinus findings as absence of a defect.')
   b.update(title='Alternative Implant Design',subtitle='Same surgical pathway, different macrodesign',surgery='Compare the same non-regenerative surgical pathway using an alternative implant geometry and its drilling protocol.',pros='A second implant-design option without inventing a reconstructive indication.',limits='The design comparison is not evidence that a different implant is superior for this patient.')
  for p in plans:
-  if r('ctg_planned')=='IMP-CTG-YES' and mode not in ('soft','staged_pending'):
-   p['surgery']+=' Reassess the simultaneous CTG objective for thickness/contour at implant placement; this does not in itself correct vertical STH.'
+  recs_p=tp_procedure_recommendations()
+  if (recs_p['CTG']['status']=='suggested' or r('ctg_planned')=='IMP-CTG-YES') and mode not in ('soft','staged_pending'):
+   p['surgery']+=' Assess CTG/soft-tissue augmentation to address volume and/or the STH concern; vertical gain is not guaranteed.'
+  if recs_p['FGG']['status']=='suggested' and mode not in ('soft','staged_pending'):
+   p['surgery']+=' Assess FGG or another technique for inadequate keratinized mucosa, with timing individualized.'
   d=tp_sizes(p['family'],post_augmentation=p['post'],short_only=p['short'])
   p['sizes']=d
   p['size_display']=('Ø'+tp_fmt(d['pick'][0])+' × '+tp_fmt(d['pick'][1])+' mm · screening candidate') if d['pick'] else 'Dimensions pending / no valid match'
@@ -607,8 +696,10 @@ def tp_export_html(plans_result):
  snippets=[]
  for p in plans_result['plans']:
   snippets.append('<section><h2>Option '+p['key']+' — '+escape(p['title'])+'</h2><p>'+escape(p['subtitle'])+'</p><p><b>Approach:</b> '+escape(p['surgery'])+'</p><p><b>Implant:</b> '+escape(FAMILIES[p['family']])+'</p><p><b>Dimensions:</b> '+escape(p['size_display'])+'</p><p><b>Status:</b> '+escape(p['status'])+'</p><p><b>Potential benefit:</b> '+escape(p['pros'])+'</p><p><b>Limitation:</b> '+escape(p['limits'])+'</p></section>')
+ recs=tp_procedure_recommendations()
+ procedure_summary='<section><h2>Procedure screening</h2>'+''.join('<p><b>'+k+':</b> '+escape(recs[k]['status'])+' · '+escape('; '.join(recs[k]['why']) or ('Additional data required' if recs[k]['missing'] else 'No trigger in entered findings'))+'</p>' for k in ('CTG','FGG','GBR'))+'</section>'
  ret,acc=tp_restoration_text()
- return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Implant treatment comparison</title><style>body{font:15px Arial,sans-serif;max-width:970px;margin:38px auto;color:#273246}h1{color:#35537e}section{border:1px solid #dae4e7;border-radius:12px;padding:20px;margin:14px 0}h2{color:#365e74}p{line-height:1.5}.footer{font-size:12px;color:#607080}</style></head><body><h1>Treatment Strategy &amp; Implant Selection</h1><p><b>Patient:</b> '+name+' &nbsp; <b>Site (FDI):</b> '+teeth+'</p><p><b>Clinical notes:</b> '+escape(', '.join(plans_result['reasons']) or 'Pending clinical review')+'</p>'+''.join(snippets)+'<section><h2>Restorative discussion</h2><p>'+escape(ret)+'</p><p>'+escape(acc)+'</p></section><p class="footer">Clinical decision-support draft only. Dimensions are from the clinician-edited project matrix and are not verified US SKUs. Use current manufacturer IFU, case-specific CBCT evaluation and clinician judgment. This report may include patient data; handle securely.</p></body></html>')
+ return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Implant treatment comparison</title><style>body{font:15px Arial,sans-serif;max-width:970px;margin:38px auto;color:#273246}h1{color:#35537e}section{border:1px solid #dae4e7;border-radius:12px;padding:20px;margin:14px 0}h2{color:#365e74}p{line-height:1.5}.footer{font-size:12px;color:#607080}</style></head><body><h1>Treatment Strategy &amp; Implant Selection</h1><p><b>Patient:</b> '+name+' &nbsp; <b>Site (FDI):</b> '+teeth+'</p><p><b>Clinical notes:</b> '+escape(', '.join(plans_result['reasons']) or 'Pending clinical review')+'</p>'+procedure_summary+''.join(snippets)+'<section><h2>Restorative discussion</h2><p>'+escape(ret)+'</p><p>'+escape(acc)+'</p></section><p class="footer">Clinical decision-support draft only. Dimensions are from the clinician-edited project matrix and are not verified US SKUs. Use current manufacturer IFU, case-specific CBCT evaluation and clinician judgment. This report may include patient data; handle securely.</p></body></html>')
 
 with st.sidebar:
  # 1 · Patient name (large) + compact context
@@ -835,13 +926,38 @@ elif step==4:
    with col_:
     st.markdown('<div class="tp-finding"><div class="k">'+escape(k_)+'</div><div class="v">'+escape(v_)+'</div><div class="s">'+escape(sub_)+'</div></div>',unsafe_allow_html=True)
   st.markdown('')
-  with st.expander('Planning decisions · grafting, GBR and loading (edit)',expanded=any(r(k) is None for k in ('ctg_planned','gbr_approach','immediate_loading','sth_adequacy'))):
+  st.markdown('#### Procedure recommendations · derived from Surgical Assessment')
+  st.caption('The app proposes what needs to be evaluated. These are screening prompts, not mandatory procedures; no unknown value is treated as adequate.')
+  recs_=tp_procedure_recommendations()
+  proc_cols_=st.columns(3)
+  for pcol_,code_,label_ in zip(proc_cols_,('CTG','FGG','GBR'),('CTG · Soft-tissue volume / STH','FGG · Keratinized mucosa','GBR · Bone deficiency')):
+   rec_=recs_[code_]
+   with pcol_:
+    with st.container(border=True):
+     st.markdown('**'+label_+'**')
+     status_label_={'suggested':'◉ Consider / assess','not_indicated':'✓ Not triggered by current findings','pending':'◌ Assessment incomplete'}[rec_['status']]
+     st.markdown('**'+status_label_+'**')
+     for reason_ in rec_['why']:st.write('• '+reason_)
+     if rec_['missing']:st.caption('Missing: '+', '.join(rec_['missing']))
+     st.caption(rec_['note'])
+  gbr_rec_=recs_['GBR']
+  if gbr_rec_['min_d'] is not None:
+   st.caption('Minimum diameter used for this site: Ø'+tp_fmt(gbr_rec_['min_d'])+' mm · Minimum width: '+tp_fmt(gbr_rec_['required_width'])+' mm · Minimum mesiodistal root-to-root space: '+tp_fmt(gbr_rec_['required_md'])+' mm. Ø4.0 mm may be preferred for molars if anatomy and prosthetics allow. Actual implant dimensions must be cross-checked with the catalog.')
+  if recs_['CTG']['status']=='suggested' and r('ctg_planned')=='IMP-CTG-NO':
+   st.warning('CTG/soft-tissue augmentation is flagged for assessment but the clinician selected no simultaneous CTG. Document the rationale or another method/timing; the screening finding is retained.')
+  if gbr_rec_['status']=='suggested' and r('gbr_approach')=='IMP-GBR-NONE':
+   if gbr_rec_['md_only_conflict']:
+    st.warning('Interradicular space is insufficient for the minimum site-specific diameter. GBR alone will NOT create space between roots. Do not clear an implant without resolving this constraint.')
+   else:
+    st.warning('Bone deficiency/insufficient dimensions are flagged, although “No GBR planned” is selected. Evaluate alternative placement or document the reason before treating the site as suitable.')
+  with st.expander('Clinician review · grafting, GBR and loading (edit)',expanded=False):
    st.caption('These questions influence the two proposed pathways. Unanswered fields remain unknown; an unknown finding is never treated as adequate anatomy.')
    cs,ct=st.columns(2)
    yesno=lambda v:opts(v,[('YES','Yes',''),('NO','No','')],prefix='IMP')
    with cs:
-    pick('ctg_planned','CTG simultaneously with implant placement?',yesno('CTG'),'CTG aims to change soft-tissue thickness/contour and does not necessarily increase vertical STH.')
-    pick('sth_adequacy','Is supracrestal tissue height appropriate for the intended platform?',opts('STH',[('YES','Adequate for the planned platform','Assessment of STH, emergence and proposed depth is favorable.'),('NO','Not adequate','STH/restorative tissue conditions need correction or Bone Level management.')],prefix='IMP'),'A clinician assessment; the app does not assume a universal STH cut-off from the measurement alone.')
+    pick('ctg_planned','Clinician decision: simultaneous CTG?',yesno('CTG'),'This does not erase an automatic CTG assessment trigger. CTG can add volume but predictable vertical STH gain cannot be assumed.')
+    pick('fgg_timing','Clinician decision: keratinized-tissue augmentation',opts('FGG',[('REVIEW','Undecided / review FGG or alternatives',''),('SIMULT','Consider FGG simultaneous',''),('STAGED','Consider FGG before implant placement',''),('LATER','Consider FGG after restoration / placement',''),('NO','Not planned (document rationale)','')],prefix='IMP'),'FGG is primarily used to increase keratinized mucosa; the exact approach is influenced by site and treatment stage.')
+    st.caption('STH is evaluated automatically using the clinician-defined <2.0 mm review trigger; the numeric measurement comes from Surgical Assessment. Vertical graft outcome is not assumed.')
     if r('site')=='CASE-SITE-EXTRACT':pick('immediate_placement','Immediate placement in extraction socket?',yesno('IMMPL'),'Confirm intact/compromised socket, sufficient bone for anchorage and restoration-guided 3D position.')
     else:clear('immediate_placement')
    with ct:
@@ -926,7 +1042,7 @@ elif step==4:
   st.download_button('⬇ Export current treatment comparison (HTML)',data=tp_export_html(result_),file_name='implant_treatment_comparison.html',mime='text/html',help='Creates a local summary. The report may contain patient information; store securely.')
   with st.expander('Methodology, dimension-screening rules & safety limits',expanded=False):
    st.markdown('**Working catalog:** BLC, BLX, BLT, TLC and TLX; each diameter is paired only with the lengths in the clinician-edited project matrix. Stock and IFU/SKU eligibility have not been independently verified.')
-   st.markdown('**Initial diameter ceiling:** minimum of (ridge width − facial wall − 1.0 mm lingual wall) and (interradicular space − 3.0 mm). Facial screen uses 2.0 mm for esthetic/anterior sites and 1.6 mm elsewhere. The software must still review shoulder/platform size, cross-sectional contour and complete CBCT geometry.')
+   st.markdown('**Minimum dimensional screening:** 1.5 mm facial, 1.0 mm palatal/lingual, 1.5 mm mesial and distal to natural roots. Thus width ≥ implant Ø + 2.5 mm, and mesiodistal space ≥ implant Ø + 3.0 mm. Use Ø3.75 mm as the posterior screening floor (Ø4.0 mm often preferred for molars), Ø3.3 mm anteriorly, with Ø2.9 mm allowed only for selected upper laterals and lower incisors. An esthetic facial target around 2 mm remains preferable. Confirm exact CBCT geometry, shoulder/platform dimensions and IFU.')
    st.markdown('**Initial length ceiling:** residual bone height − 2.0 mm, inherited from the original app as a provisional conservative screen. It is NOT a universal fixed anatomical safety margin and cannot replace site-specific 3D planning, drill-tip clearance or the actual manufacturer-approved protocol.')
    st.markdown('**Short vs sinus:** shown only as a comparison concept for a posterior maxillary molar with reduced native bone height. A short implant is not considered feasible if no listed length passes the conservative initial screen; sinus pathology demands separate review.')
    for n_ in SAFETY_NOTES:st.markdown('- '+n_)
@@ -948,12 +1064,16 @@ elif step==5:
    st.warning('No treatment pathway has been selected yet. Compare Options A and B in Step 05 before finalizing the surgical sequence.')
   with st.container(border=True):
    st.markdown('#### Record the clinician-approved surgical sequence')
+   rr_=tp_procedure_recommendations()
+   st.caption('Procedure assessment: '+ ' · '.join(k+': '+('evaluate' if rr_[k]['status']=='suggested' else 'data missing' if rr_[k]['status']=='pending' else 'not triggered') for k in ('CTG','FGG','GBR')))
    choose('surgical_option','Surgical approach',['Undecided','Direct placement / no augmentation','CTG simultaneous to implant placement','GBR simultaneous to implant placement','GBR staged prior to implant','Sinus floor elevation (transcrestal)','Sinus floor elevation (lateral)','Soft-tissue augmentation staged','Combination / individualized protocol'])
    field('surgical_notes',st.text_area,'Procedure rationale, sequence and anatomical safeguards',default='',placeholder='Site-specific plan, contraindications, need for stages, primary stability, closure…')
    field('surgical_reassessment',st.text_area,'Required reassessment before surgery',default='',placeholder='CBCT review, sinus assessment, tissue status, anatomical structures, IFU checks…')
   with st.expander('Surgical alternatives to compare · case-sensitive guidance',expanded=False):
    if result_['mode']=='sinus':
     st.markdown('**Short implant versus sinus elevation:** confirm a commercially valid short length, native bone support, crown/implant relationship and sinus conditions. An option with no valid screened implant length is not cleared.')
+   elif result_['mode']=='space':
+    st.markdown('**Interradicular space limitation:** neither simultaneous nor staged GBR alone increases the separation between adjacent natural roots. Evaluate position, orthodontic or restorative alternatives and remeasure before proposing a specific implant.')
    elif result_['mode'] in ('gbr','staged_pending'):
     st.markdown('**Simultaneous versus staged GBR:** evaluate restoration-guided 3D positioning, primary stability, defect containment, graft stabilization, closure and the need for horizontal/vertical gain.')
    elif result_['mode']=='soft':
