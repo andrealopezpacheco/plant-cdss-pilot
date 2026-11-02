@@ -228,8 +228,6 @@ def references(section):
    link('Yan et al., 2019 · Short implants vs sinus elevation','https://bmjopen.bmj.com/content/9/10/e029826')
   elif section==6:
    link('Straumann Variobase for Crown AS information','https://www.straumann.com/content/dam/media-center/straumann/en/documents/brochure/product-information/490.288-en_low.pdf')
-   link('Restorative space by prosthesis type · JADA 2019','https://pubmed.ncbi.nlm.nih.gov/31352966/')
-   link('Misch et al. · Crown-height space consensus (2005)','https://icoi.world/wp-content/uploads/2024/12/Consensus_Conference_Panel_Report__Crown_Height-2.pdf')
   else:
    st.caption('Future work: add site-specific maintenance evidence and patient-level risk stratification before validation.')
 
@@ -251,19 +249,13 @@ SAFETY_NOTES=[
  'The X design can favor primary stability, but higher torque does not prove biological superiority nor authorize immediate loading by itself.',
  'Tissue Level is not universally contraindicated in augmented sites; excluding it when CTG/GBR is planned is a deliberate, conservative rule of this CDSS.',
  'For D1 to D4 density, do not infer an indication from CBCT HU alone: consider the clinical evaluation, the drilling protocol and scanner variability.',
- 'The final recommendation requires the current IFU of the SKU, prosthetic compatibility, stability, anatomical analysis and clinical judgment.',
- 'SRA 7 mm and Ti-base 6 mm are local CDSS alert thresholds; compare dimensions from the SAME reference landmark and verify the exact component. Crestal crown-height >15 mm triggers biomechanical review.',
- 'Dilacerated roots require a verified root-safe 3D osteotomy; an angled abutment cannot resolve a surgical collision.']
+ 'The final recommendation requires the current IFU of the SKU, prosthetic compatibility, stability, anatomical analysis and clinical judgment.']
 REDUCED_HEIGHT_MM=8.0  # working threshold for "reduced posterior bone height"; to be confirmed
 PROX_MM=1.5      # bone/space kept mesial and distal to the implant, from the adjacent roots
 BUCCAL_MM=1.5    # planned buccal bone thickness (ITI 2023: more than 1.5 mm)
 PALATAL_MM=1.0   # planned palatal/lingual bone thickness
-# Working clinical thresholds, not universal Straumann component specifications.
-SRA_SPACE_REVIEW_MM=7.0
-TIBASE_SPACE_REVIEW_MM=6.0
-CROWN_HEIGHT_REVIEW_MM=15.0
-
 _DEH,_FEN='SUR-FACIAL-DEHISCENCE','SUR-FACIAL-FENESTRATION'
+_APICAL=('SUR-STRUCT-NASAL','SUR-STRUCT-INCISIVE','SUR-STRUCT-IAN','SUR-STRUCT-MENTAL','SUR-STRUCT-MANDINC','SUR-STRUCT-LINGFORAMEN','SUR-STRUCT-LINGUAL')
 
 def implant_level():
  # Sequence: regenerative need -> timing (simultaneous or staged) -> tissue condition after re-evaluation -> Bone/Tissue Level.
@@ -343,7 +335,7 @@ def implant_scenarios():
  imm_pl,imm_ld=r('immediate_placement'),r('immediate_loading')
  ctg,gbr=r('ctg_planned'),r('gbr_approach')
  defect=r('facial_defect') in (_DEH,_FEN)
- apical=r('adjacent_roots')=='SUR-ROOTS-DILACERATED'
+ apical=r('adjacent_roots')=='SUR-ROOTS-DILACERATED' or any(c in (r('anat_structures',[]) or []) for c in _APICAL)
  level,_,_=implant_level()
  S=[
  ('BL',anterior and r('esthetic')=='Yes' and ctg=='IMP-CTG-YES','Anterior esthetic site; CTG for contour or thickness','BLC','BLT / BLX','Bone Level allows planning emergence and augmentation; C has a thin apex for limited anatomy.','Do not equate CTG with a vertical STH increase; evaluate the buccal plate, platform and profile.'),
@@ -351,7 +343,7 @@ def implant_scenarios():
  ('BL',imm_pl=='IMP-IMMPL-YES' and imm_ld=='IMP-IMMLD-YES','Immediate placement with immediate provisionalization or loading','BLX','BLC / BLT if they meet the criteria','X is designed to favor primary stability and immediate protocols.','Load only after verifying torque/ISQ according to a validated protocol, absence of micromovement and occlusal control.'),
  ('BL',site=='CASE-SITE-HEALED' and bq=='SUR-BQ-D4','Healed ridge with low-density trabecular bone (D4)','BLX or BLT','BLC','Conical design and an adapted preparation provide greater stability capacity.','Do not impose generic underpreparation: follow the density protocol and control torque.'),
  ('BL',bq in ('SUR-BQ-D1','SUR-BQ-D2'),'Dense bone / thick cortex (D1 to D2)','BLC or BLT with an adequate preparation','BLX with an adapted sequence','The choice must control cortical compression, not maximize torque.','Avoid overcompression; use a specific drilling/thread protocol and control heat.'),
- ('BL',apical,'Restricted interradicular anatomy (dilacerated roots)','BLC or BLT','BLX if it allows orientation','The thin C apex and the BLT apical taper favor selective anatomical evaluation.','Confirm distances to roots, cortex and anatomical structures.'),
+ ('BL',apical,'Restricted apical anatomy (dilacerated roots or nearby anatomical structures)','BLC or BLT','BLX if it allows orientation','The thin C apex and the BLT apical taper favor selective anatomical evaluation.','Confirm distances to roots, cortex and anatomical structures.'),
  ('BL',incisor and 'PRO-SPACELIM-RED_MD' in (r('pro_space_lim',[]) or []),'Narrow mesiodistal space (selected incisors)','BLT Ø2.9 SC','BLC Ø3.3 if the anatomy allows','Ø2.9 has specific indications for narrow incisors; it is not a universal space solution.','Validate the mesiodistal distance, restorative diameter and forces; check the IFU exclusions.'),
  ('BL',defect and gbr=='IMP-GBR-SIMULT','Buccal defect / dehiscence with simultaneous GBR','BLC / BLT','BLX if additional stability is required','Bone Level is prioritized for regeneration management and 3D position.','Assess the severity of the defect and the need for a staged approach.'),
  ('TL',posterior and site=='CASE-SITE-HEALED' and imm_ld=='IMP-IMMLD-NO' and level=='TL','Healed posterior site; adequate STH, gingiva and bone; no GBR','TLC','TLX','Transmucosal Tissue Level when the shoulder position is prosthetically favorable.','Ensure hygiene access, emergence, restorability and phenotype.'),
@@ -501,73 +493,6 @@ def tp_site_info():
  return dict(anterior=False,maxilla=maxilla,molar=False,posterior=False,kind=None,target=None,low=None,high=None)
 
 
-def tp_root_screen():
- """Root morphology is a trajectory-specific safety question; an angled abutment cannot fix root collision."""
- if r('adjacent_roots')!='SUR-ROOTS-DILACERATED':
-  return dict(active=False,feasible=True,md=r('md_bone'),status='not_applicable',missing=[])
- feas=r('root_3d_feasible')
- clearance=r('root_min_md')
- missing=[]
- if feas is None or feas=='SUR-ROOT3D-UNCERTAIN':missing.append('CBCT verification of a root-safe prosthetically oriented 3D trajectory')
- if clearance is None:missing.append('Minimum root-to-root clearance along the proposed trajectory')
- if feas=='SUR-ROOT3D-NO':status='unsafe_trajectory'
- elif missing:status='pending'
- else:status='measured'
- # Use the NARROWEST verified space along the entire proposed trajectory.
- md=min([float(x) for x in (r('md_bone'),clearance) if x is not None],default=None)
- return dict(active=True,feasible=feas=='SUR-ROOT3D-YES',md=md,status=status,missing=missing)
-
-
-def tp_surgical_access_guidance():
- opening=r('mouth_opening')
- if opening=='CASE-MOUTH-OPTIMAL':
-  return ('Guided surgery can be evaluated first if CBCT planning, guide support, instrument access and workflow suitability permit. Adequate mouth opening alone does not establish guided-surgery eligibility.', 'Guided surgery: candidate for evaluation')
- if opening=='CASE-MOUTH-LIMITED':
-  return ('Prioritize assessment of a freehand or shorter-instrument approach if safely accessible. Static-guide sleeves and long drills may not fit; limited opening can also prevent freehand access. Evaluate dynamic navigation or another approach when available.', 'Limited access: freehand / short instruments to evaluate')
- return ('Record maximal mouth opening before deciding between static guidance, dynamic guidance and freehand placement.', 'Surgical access: pending assessment')
-
-
-def tp_restorative_space_screen():
- """Working component-sensitive warnings. Do not treat a threshold as manufacturer IFU."""
- io=r('pro_io')
- comp=r('pro_component')
- reference=r('pro_io_datum')
- chs=r('pro_chs')
- warnings=[]
- missing=[]
- if io is None:missing.append('Available interocclusal space')
- if comp is None:missing.append('Intended abutment family (SRA or Ti-base)')
- if reference is None:missing.append('Vertical measurement reference')
- thresholds={'PRO-COMP-SRA':SRA_SPACE_REVIEW_MM,'PRO-COMP-TIBASE':TIBASE_SPACE_REVIEW_MM}
- min_space=thresholds.get(comp)
- if io is not None:
-  if min_space is not None and io<min_space:
-   label='SRA' if comp=='PRO-COMP-SRA' else 'Ti-base'
-   warnings.append(f'INSUFFICIENT WORKING SPACE: {tp_fmt(io)} mm is below the {tp_fmt(min_space)} mm {label} screening threshold. Reconsider the component/position/restorative design and verify the exact Straumann IFU.')
-  elif comp is None and io<TIBASE_SPACE_REVIEW_MM:
-   warnings.append('LIMITED VERTICAL SPACE: below both preliminary SRA (7 mm) and Ti-base (6 mm) thresholds; select a component and confirm its actual requirements.')
-  elif comp is None and io<SRA_SPACE_REVIEW_MM:
-   warnings.append('BORDERLINE VERTICAL SPACE: potentially inadequate for an SRA; evaluate Ti-base and the precise component dimensions.')
-  elif comp=='PRO-COMP-SRA' and SRA_SPACE_REVIEW_MM<=io<7.5:
-   warnings.append('BORDERLINE SRA SPACE: the 7 mm project threshold is met, but a literature review reports approximately 7.5 mm for abutment-level fixed screw-retained restorations. Validate the selected component.')
- if io is not None and reference in (None,'PRO-IODATUM-OTHER'):
-  warnings.append('MEASUREMENT DATUM UNRESOLVED: confirm whether the vertical measure is from the implant platform, abutment interface or mucosal level before applying a product-specific threshold.')
- if chs is not None and chs>CROWN_HEIGHT_REVIEW_MM:
-  warnings.append(f'EXCESSIVE CROWN-HEIGHT SPACE: {tp_fmt(chs)} mm exceeds the 15 mm biomechanical review threshold. Assess crown/implant relationship, occlusal forces, prosthesis design, number/distribution of implants and risk of technical/mechanical complications.')
- elif chs is None and io is not None and io>CROWN_HEIGHT_REVIEW_MM:
-  warnings.append('AVAILABLE VERTICAL SPACE >15 mm: measure crown-height space from its correct crestal reference to assess mechanical risk; interocclusal and crown-height measurements are not interchangeable.')
- if chs is None:missing.append('Crown-height space for excessive-height review (optional)')
- return dict(warnings=warnings,missing=missing,minimum=min_space,component=comp,reference=reference,io=io,chs=chs)
-
-
-def tp_loading_guidance():
- if r('esthetic')=='No':
-  return ('Conventional/delayed loading or provisionalization is the default comparison for a non-esthetic case; an immediate protocol is secondary and requires a separate clinical indication, sufficient stability and occlusal risk control.', 'Conventional first (non-esthetic site)')
- if r('immediate_loading')=='IMP-IMMLD-YES':
-  return ('Immediate provisionalization/loading is under evaluation because the clinician selected it; esthetic concern alone never establishes stability, biomechanical safety or eligibility.', 'Immediate only if validated')
- return ('Conventional loading is the neutral baseline. Consider an immediate protocol only when benefit, insertion stability, anatomy and occlusal conditions support it.', 'Conventional baseline; immediate conditional')
-
-
 def tp_procedure_recommendations():
  """Screening prompts derived from recorded findings, not a treatment prescription.
 
@@ -601,7 +526,7 @@ def tp_procedure_recommendations():
  # Width is measured relative to prosthetically correct position. For a single
  # tooth, mesiodistal space is assumed to be bounded by adjacent natural roots.
  min_d=info['low']
- w,md=r('ridge_width'),tp_root_screen()['md']
+ w,md=r('ridge_width'),r('md_bone')
  gbr_why=[]
  gbr_missing=[]
  if min_d is None:gbr_missing.append('Single-tooth site and tooth type')
@@ -611,7 +536,7 @@ def tp_procedure_recommendations():
   if w is None:gbr_missing.append('Ridge width measured at the planned implant position')
   elif w+1e-8<width_req:
    gbr_why.append(f'Ridge width {tp_fmt(w)} mm < {tp_fmt(width_req)} mm needed for Ø{tp_fmt(min_d)} (vestibular 1.5 + palatal/lingual 1.0 mm).')
-  if md is None:gbr_missing.append('Mesiodistal space between adjacent roots, including trajectory-specific root clearance if dilacerated')
+  if md is None:gbr_missing.append('Mesiodistal space between adjacent roots')
   elif md+1e-8<md_req:
    gbr_why.append(f'Interradicular width {tp_fmt(md)} mm < {tp_fmt(md_req)} mm needed for Ø{tp_fmt(min_d)} (1.5 mm mesial + 1.5 mm distal). GBR alone does not increase root-to-root space: evaluate root positions, orthodontic/prosthetic alternatives or another eligible implant size.')
  for key,bad,label in (
@@ -624,9 +549,6 @@ def tp_procedure_recommendations():
   elif value in ('SUR-HDEF-SUSPECTED','SUR-VDEF-SUSPECTED'):
    gbr_why.append(label.replace('reports','suspects').replace('a horizontal','a possible horizontal').replace('a vertical','a possible vertical'))
   elif value is None:gbr_missing.append(key.replace('_',' ')+' assessment')
- root_check=tp_root_screen()
- # Root collision is a distinct anatomical issue, NOT an automatic indication for GBR.
- # It is handled by the root-pathway alert and blocks dimensional clearance.
  status='suggested' if gbr_why else ('pending' if gbr_missing else 'not_indicated')
  gbr=dict(status=status,why=gbr_why,missing=gbr_missing,procedure='GBR / bone-defect treatment assessment',
           note='A dimensional deficit triggers bone/space planning review, not automatic GBR. A narrow interradicular gap cannot be widened with GBR alone. Confirm CBCT 3D position, defect morphology, stability and restorative alternatives.',
@@ -636,14 +558,11 @@ def tp_procedure_recommendations():
                             and (w is None or w+1e-8>=min_d+2.5)
                             and r('horizontal_defect')=='SUR-HDEF-NONE'
                             and r('vertical_defect')=='SUR-VDEF-NONE'
-                            and r('facial_defect')=='SUR-FACIAL-NONE') and not (root_check['status']=='unsafe_trajectory'))
+                            and r('facial_defect')=='SUR-FACIAL-NONE'))
  return {'CTG':ctg,'FGG':fgg,'GBR':gbr}
 
 def tp_has_bone_defect():
- p=tp_procedure_recommendations()['GBR']
- # A root collision or insufficient space between roots alone is NOT a bone deficit treatable by GBR.
- if p['md_only_conflict'] or tp_root_screen()['status']=='unsafe_trajectory':return False
- return p['status']=='suggested'
+ return tp_procedure_recommendations()['GBR']['status']=='suggested'
 
 def tp_has_soft_defect():
  recs=tp_procedure_recommendations()
@@ -653,7 +572,7 @@ def tp_family_pair(level):
  info=tp_site_info()
  narrow=info['kind']=='narrow incisor' and ('PRO-SPACELIM-RED_MD' in (r('pro_space_lim',[]) or []))
  if narrow:return 'IMP-FAM-BLT','IMP-FAM-BLC'
- imm=r('immediate_loading')=='IMP-IMMLD-YES' and r('esthetic')=='Yes'
+ imm=r('immediate_loading')=='IMP-IMMLD-YES'
  if level=='TL':return ('IMP-FAM-TLX','IMP-FAM-TLC') if imm else ('IMP-FAM-TLC','IMP-FAM-TLX')
  if imm or r('bone_quality')=='SUR-BQ-D4':return 'IMP-FAM-BLX','IMP-FAM-BLT'
  if r('immediate_placement')=='IMP-IMMPL-YES':return 'IMP-FAM-BLT','IMP-FAM-BLX'
@@ -662,12 +581,7 @@ def tp_family_pair(level):
 def tp_sizes(family,post_augmentation=False,short_only=False):
  'Dimensional screening only, never an implant clearance or full 3D CBCT analysis.'
  info=tp_site_info()
- w,md,h=r('ridge_width'),tp_root_screen()['md'],r('ridge_height')
- root_check=tp_root_screen()
- if root_check['status']=='unsafe_trajectory':
-  return dict(diameters=[],lengths=[],pick=None,ceiling=None,facial=BUCCAL_MM,reason='Unsafe CBCT trajectory relative to dilacerated roots. No implant is cleared; an angled abutment cannot make an unsafe trajectory acceptable.')
- if root_check['status']=='pending':
-  return dict(diameters=[],lengths=[],pick=None,ceiling=None,facial=BUCCAL_MM,reason='Root dilaceration: confirm minimum space along the full planned implant trajectory and verify 3D position before recommending a size.')
+ w,md,h=r('ridge_width'),r('md_bone'),r('ridge_height')
  # Avoid implying that an unmeasured dimension is adequate.
  dims_known=w is not None and md is not None
  # User-defined minimum is 1.5 mm buccal; ~2 mm remains a preferred esthetic target.
@@ -716,9 +630,7 @@ def tp_build_plans():
  gbr_case=tp_has_bone_defect() or r('gbr_approach')=='IMP-GBR-SIMULT' or (r('gbr_approach')=='IMP-GBR-STAGED' and r('staged_status')!='IMP-STG-HEALED')
  soft_case=tp_has_soft_defect() or r('ctg_planned')=='IMP-CTG-YES'
  staged_pending=(r('gbr_approach')=='IMP-GBR-STAGED' and r('staged_status')!='IMP-STG-HEALED')
- root_check=tp_root_screen()
- space_only=(root_check['status'] in ('unsafe_trajectory','pending') or
-             (tp_procedure_recommendations()['GBR']['md_only_conflict'] and r('gbr_approach') not in ('IMP-GBR-SIMULT','IMP-GBR-STAGED')))
+ space_only=tp_procedure_recommendations()['GBR']['md_only_conflict'] and r('gbr_approach') not in ('IMP-GBR-SIMULT','IMP-GBR-STAGED')
  mode='routine'
  if staged_pending:mode='staged_pending'
  elif space_only:mode='space'
@@ -736,7 +648,7 @@ def tp_build_plans():
   # Tissue Level can be reconsidered after staged healing and re-evaluation.
   if b['family'].startswith('IMP-FAM-T'):b['family']='IMP-FAM-BLC'
  elif mode=='space':
-  a.update(title='Root-safe 3D Planning / Space Review',subtitle='Implant placement deferred until root-safe geometry is verified',surgery='Evaluate space management, neighboring root positions, orthodontic or prosthetic alternatives before any implant osteotomy. GBR alone cannot increase the distance between natural roots.',post=True,pros='Addresses the actual spatial limitation rather than adding bone unnecessarily.',limits='Dilacerated roots or inadequate root-to-root spacing require CBCT re-evaluation; no implant dimensions are cleared until the planned trajectory is safe.')
+  a.update(title='Interradicular Space Correction',subtitle='Implant placement deferred until the root-to-root constraint is resolved',surgery='Evaluate space management, neighboring root positions, orthodontic or prosthetic alternatives before any implant osteotomy. GBR alone cannot increase the distance between natural roots.',post=True,pros='Addresses the actual spatial limitation rather than adding bone unnecessarily.',limits='No diameter meeting the site-specific minimum can currently satisfy 1.5 mm on both adjacent roots.')
   b.update(title='Alternative Restorative Strategy',subtitle='Explore non-implant or revised restoration concepts',surgery='Reassess the planned restorative design and a revised 3D position. Only reconsider a smaller implant if its site-specific IFU indication and biomechanics allow it; no implant is dimensionally cleared at present.',post=True,pros='Avoids mistakenly describing a root-space problem as a bone-volume defect treatable by GBR.',limits='Requires clinical review and new or verified interradicular dimensions.')
  elif mode=='gbr':
   a.update(title='Simultaneous GBR',subtitle='Implant and localized augmentation in one intervention',surgery='Consider simultaneous GBR only if prosthetically correct 3D placement, primary stability, graft stabilization and tension-free soft-tissue closure are achievable.',pros='May avoid a separate reconstruction stage for a suitably contained/localized defect.',limits='Not appropriate solely because the defect appears small: morphology and stability govern feasibility.')
@@ -759,9 +671,6 @@ def tp_build_plans():
   a.update(title='Direct Placement Strategy',subtitle='No additional regeneration if truly unnecessary',surgery='Assess direct placement within the existing ridge; confirm primary stability, 3D restoration-guided position and soft-tissue adequacy.',pros='Can avoid augmentation if sufficient bone and tissues are confirmed.',limits='Do not treat incomplete tissue, bone or sinus findings as absence of a defect.')
   b.update(title='Alternative Implant Design',subtitle='Same surgical pathway, different macrodesign',surgery='Compare the same non-regenerative surgical pathway using an alternative implant geometry and its drilling protocol.',pros='A second implant-design option without inventing a reconstructive indication.',limits='The design comparison is not evidence that a different implant is superior for this patient.')
  for p in plans:
-  access_text,_=tp_surgical_access_guidance()
-  p['surgery']+=' Surgical access: '+access_text
-  p['loading']=tp_loading_guidance()[0]
   recs_p=tp_procedure_recommendations()
   if (recs_p['CTG']['status']=='suggested' or r('ctg_planned')=='IMP-CTG-YES') and mode not in ('soft','staged_pending'):
    p['surgery']+=' Assess CTG/soft-tissue augmentation to address volume and/or the STH concern; vertical gain is not guaranteed.'
@@ -770,7 +679,7 @@ def tp_build_plans():
   d=tp_sizes(p['family'],post_augmentation=p['post'],short_only=p['short'])
   p['sizes']=d
   p['size_display']=('Ø'+tp_fmt(d['pick'][0])+' × '+tp_fmt(d['pick'][1])+' mm · screening candidate') if d['pick'] else 'Dimensions pending / no valid match'
-  if p['post']:p['status']='Provisional: reassess after augmentation / revised planning'
+  if p['post']:p['status']='Provisional: reassess after augmentation'
   elif not d['pick']:p['status']='Not dimensionally cleared with current data'
   else:p['status']='Dimensional candidate only — clinical validation required'
   if p['key']=='A' and mode=='gbr':
@@ -779,12 +688,6 @@ def tp_build_plans():
     p['status']=('Simultaneous GBR not supported by screening criteria' if sup['verdict']=='staged' else 'Simultaneous GBR suitability pending review')
   if mode=='sinus' and r('sinus') in ('SUR-SINUS-POSSIBLE','SUR-SINUS-TREATED'):
    p['status']='Sinus condition requires assessment before pathway selection'
-  if r('cbct_clearance')!='SUR-CBCT-VERIFIED':
-   p['status']+=' · anatomical safety clearance pending'
-  if tp_restorative_space_screen()['warnings']:
-   p['status']+=' · restorative space review required'
-  if root_check['active'] and r('root_access') in (None,'SUR-ROOTACCESS-UNRESOLVED'):
-   p['status']+=' · restorative access pathway pending'
  return dict(mode=mode,level=level,reasons=reasons,missing=missing,plans=plans)
 
 def tp_export_html(plans_result):
@@ -792,12 +695,11 @@ def tp_export_html(plans_result):
  teeth=escape(', '.join(r('teeth',[]) or []))
  snippets=[]
  for p in plans_result['plans']:
-  snippets.append('<section><h2>Option '+p['key']+' — '+escape(p['title'])+'</h2><p>'+escape(p['subtitle'])+'</p><p><b>Approach:</b> '+escape(p['surgery'])+'</p><p><b>Implant:</b> '+escape(FAMILIES[p['family']])+'</p><p><b>Dimensions:</b> '+escape(p['size_display'])+'</p><p><b>Loading approach:</b> '+escape(p['loading'])+'</p><p><b>Status:</b> '+escape(p['status'])+'</p><p><b>Potential benefit:</b> '+escape(p['pros'])+'</p><p><b>Limitation:</b> '+escape(p['limits'])+'</p></section>')
+  snippets.append('<section><h2>Option '+p['key']+' — '+escape(p['title'])+'</h2><p>'+escape(p['subtitle'])+'</p><p><b>Approach:</b> '+escape(p['surgery'])+'</p><p><b>Implant:</b> '+escape(FAMILIES[p['family']])+'</p><p><b>Dimensions:</b> '+escape(p['size_display'])+'</p><p><b>Status:</b> '+escape(p['status'])+'</p><p><b>Potential benefit:</b> '+escape(p['pros'])+'</p><p><b>Limitation:</b> '+escape(p['limits'])+'</p></section>')
  recs=tp_procedure_recommendations()
  procedure_summary='<section><h2>Procedure screening</h2>'+''.join('<p><b>'+k+':</b> '+escape(recs[k]['status'])+' · '+escape('; '.join(recs[k]['why']) or ('Additional data required' if recs[k]['missing'] else 'No trigger in entered findings'))+'</p>' for k in ('CTG','FGG','GBR'))+'</section>'
  ret,acc=tp_restoration_text()
- additional='<section><h2>Clinical review alerts</h2>'+''.join('<p>'+escape(x)+'</p>' for x in tp_restorative_space_screen()['warnings'])+'<p>'+escape(tp_loading_guidance()[0])+'</p><p>'+escape(tp_surgical_access_guidance()[0])+'</p></section>'
- return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Implant treatment comparison</title><style>body{font:15px Arial,sans-serif;max-width:970px;margin:38px auto;color:#273246}h1{color:#35537e}section{border:1px solid #dae4e7;border-radius:12px;padding:20px;margin:14px 0}h2{color:#365e74}p{line-height:1.5}.footer{font-size:12px;color:#607080}</style></head><body><h1>Treatment Strategy &amp; Implant Selection</h1><p><b>Patient:</b> '+name+' &nbsp; <b>Site (FDI):</b> '+teeth+'</p><p><b>Clinical notes:</b> '+escape(', '.join(plans_result['reasons']) or 'Pending clinical review')+'</p>'+procedure_summary+additional+''.join(snippets)+'<section><h2>Restorative discussion</h2><p>'+escape(ret)+'</p><p>'+escape(acc)+'</p></section><p class="footer">Clinical decision-support draft only. Dimensions are from the clinician-edited project matrix and are not verified US SKUs. Use current manufacturer IFU, case-specific CBCT evaluation and clinician judgment. This report may include patient data; handle securely.</p></body></html>')
+ return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Implant treatment comparison</title><style>body{font:15px Arial,sans-serif;max-width:970px;margin:38px auto;color:#273246}h1{color:#35537e}section{border:1px solid #dae4e7;border-radius:12px;padding:20px;margin:14px 0}h2{color:#365e74}p{line-height:1.5}.footer{font-size:12px;color:#607080}</style></head><body><h1>Treatment Strategy &amp; Implant Selection</h1><p><b>Patient:</b> '+name+' &nbsp; <b>Site (FDI):</b> '+teeth+'</p><p><b>Clinical notes:</b> '+escape(', '.join(plans_result['reasons']) or 'Pending clinical review')+'</p>'+procedure_summary+''.join(snippets)+'<section><h2>Restorative discussion</h2><p>'+escape(ret)+'</p><p>'+escape(acc)+'</p></section><p class="footer">Clinical decision-support draft only. Dimensions are from the clinician-edited project matrix and are not verified US SKUs. Use current manufacturer IFU, case-specific CBCT evaluation and clinician judgment. This report may include patient data; handle securely.</p></body></html>')
 
 with st.sidebar:
  # 1 · Patient name (large) + compact context
@@ -888,8 +790,7 @@ elif step==1:
   if case_type=='CASE-TYPE-SHORT':st.caption('Short Span allows up to three teeth. To select another, deselect one first.')
  choose('esthetic','Does this case involve an esthetic concern?',['No','Yes'])
  pick('mouth_opening','Maximal mouth opening',opts('MOUTH',[('OPTIMAL','Optimal','Opening sufficient for surgical and restorative instrument access.'),('LIMITED','Limited','Opening that restricts access for surgical or restorative instrumentation (e.g., posterior sites, guided surgery).')],prefix='CASE'),'Assessment of whether the maximal mouth opening allows adequate access for the planned surgery and restoration.')
- if r('mouth_opening') is not None:
-  st.info(tp_surgical_access_guidance()[0])
+ if r('mouth_opening')=='CASE-MOUTH-LIMITED':st.info('Limited mouth opening: evaluate access for surgical and restorative instruments and the feasibility of guided surgery.')
  field('site',st.selectbox,'Current site condition',default=None,options=list(SITE),format_func=lambda c:SITE[c],index=None,placeholder='Select…')
  if r('site')=='CASE-SITE-EXTRACT':st.info('Tooth is still present. Evaluate extraction considerations and potential timing options later; Type 1 is not assumed.')
 
@@ -901,14 +802,7 @@ elif step==2:
   with st.container(border=True):
    st.markdown('<div class="col-title">Restorative Space</div><div class="col-desc">Three-dimensional space available for the planned implant-supported restoration.</div>',unsafe_allow_html=True)
    numeric('pro_md','Mesiodistal space (mm)',help='Distance available mesiodistally for the future restoration, bounded by the proximal surfaces of the adjacent teeth or restorations.')
-   numeric('pro_io','Interocclusal restorative space (mm)',help='Record the available vertical restorative space measured against the opposing dentition. The reference level is essential for applying component-specific requirements.')
-   pick('pro_io_datum','Vertical measurement reference',opts('IODATUM',[('PLATFORM','Implant platform','Measured from proposed implant platform.'),('ABUTMENT','Abutment seating interface','Measured from the component seating interface.'),('MUCOSA','Mucosal margin','Measured from mucosal margin; manufacturer component requirements may use another datum.'),('OTHER','Other / unclear','Reference must be clarified before definitive prosthetic space eligibility.')]),'Identify the actual starting landmark. Do not compare measurements taken from different reference levels as if equivalent.')
-   pick('pro_component','Abutment concept for preliminary space screening',opts('COMP',[('SRA','SRA · Screw-retained abutment','Project alert under 7 mm; literature reports ~7.5 mm for many abutment-level fixed screw-retained reconstructions.'),('TIBASE','Ti-base / Variobase','Project alert under 6 mm; actual requirements depend on the specific component and crown.')]),'These are project-defined alerts, NOT universal minimum dimensions for every Straumann SKU. Verify component geometry and IFU.')
-   numeric('pro_chs','Crown-height space from ridge crest (mm) · if known',max_value=40,help='Separate crestal crown-height space used for biomechanical review; do not assume it equals the interocclusal measurement. Values >15 mm trigger a crown-height review (Misch et al.).')
-   space_info_=tp_restorative_space_screen()
-   for msg_ in space_info_['warnings']:st.warning(msg_)
-   if r('pro_io') is not None and not space_info_['warnings']:st.caption('No component-space alert triggered. Compatibility still requires the actual Straumann part and restoration design.')
-   st.caption('Literature: 2019 JADA systematic review of restorative space reports ~7.5 mm for abutment-level screw-retained designs; Misch et al. consensus describes >15 mm crestal crown-height space as excessive. These are not interchangeable measurements.')
+   numeric('pro_io','Interocclusal space (mm)',help='Vertical distance available between a reference point at the site and the opposing occlusal surface or plane, considering the planned vertical dimension of occlusion.')
    LIM=opts('SPACELIM',[('NONE','None','No space limitation identified.'),('RED_V','Reduced vertical space','Insufficient vertical space.'),('RED_MD','Reduced mesiodistal space','Insufficient mesiodistal space.'),('EXC_V','Excessive vertical space','Increased vertical space, which may require a different restorative design.'),('EXC_MD','Excessive mesiodistal space','Increased mesiodistal space, which may require a different restorative design.')])
    pickmulti('pro_space_lim','Restorative space limitation',LIM,'Clinical identification of dimensional limitations for executing the proposed restoration.',none_code='PRO-SPACELIM-NONE')
  # ---------------- 2 · Restoration–Tissue Relationship ----------------
@@ -954,8 +848,6 @@ elif step==2:
  if r('esthetic')=='Yes':st.info('Esthetic concern recorded. Evaluate provisionalization and soft-tissue architecture in restorative proposals.')
  if r('pro_ridge')=='PRO-RIDGE-DEFICIENT' or r('pro_margin')=='PRO-MARGIN-APICAL':st.info('Assess soft-tissue and/or volume augmentation options; timing and indication require evaluation.')
  if any(c in (r('pro_space_lim',[]) or []) for c in ('PRO-SPACELIM-RED_V','PRO-SPACELIM-RED_MD')):st.info('Reduced restorative space recorded: evaluate space-gaining or alternative restorative strategies when indicated.')
- if tp_restorative_space_screen()['warnings']:
-  st.warning('Restorative space review required before considering the treatment plan technically feasible. Confirm selected component dimensions, appropriate crestal/reference measurements, occlusion and restorative materials.')
 
 elif step==3:
  st.caption('Three domains of the surgical assessment. All are relevant to planning and none depends on another: complete them in any order. CBCT measurements are interpreted relative to the prosthetically ideal implant position.')
@@ -977,19 +869,19 @@ elif step==3:
    else:clear('sinus');st.caption('Sinus assessment appears for maxillary sites (select the tooth or arch in Case Type & Site).')
    pick('adjacent_pathology','Adjacent teeth',opts('ADJ',[('NONE','No pathology identified',''),('REVIEW','Pathology requires review','')],prefix='SUR'))
    pick('adjacent_roots','Adjacent root morphology',opts('ROOTS',[('NONE','No relevant alteration','Normal root morphology.'),('DILACERATED','Dilacerated roots','Roots with abnormal curvature or angulation.')],prefix='SUR'),'Morphology of the roots of the teeth adjacent to the site, assessed on CBCT. Dilacerated roots can reduce the interradicular space and alter the three-dimensional position of the implant.')
-   if r('adjacent_roots')=='SUR-ROOTS-DILACERATED':
-    st.warning('Reassess root-to-root clearance ALONG THE PROPOSED 3D IMPLANT TRAJECTORY. A change in axis may be possible, but only if the entire implant path remains safe. An angled abutment cannot compensate for root collision.')
-    pick('root_3d_feasible','Root-safe, prosthetically guided 3D placement feasible?',opts('ROOT3D',[('YES','Yes, verified on CBCT','Correct 3D implant positioning is demonstrably feasible without root collision.'),('NO','No, unsafe root collision / inadequate trajectory','Implant placement must be re-planned; an angled prosthetic component cannot solve surgical collision.'),('UNCERTAIN','Undetermined · further CBCT planning required','Do not clear dimensions until feasibility has been established.')],prefix='SUR'),'Verify the COMPLETE trajectory, not only a cross-section at the crest.')
-    numeric('root_min_md','Narrowest interradicular clearance along planned trajectory (mm)',max_value=25,help='Minimum root-to-root distance along the full proposed implant axis. The CDSS applies ≥1.5 mm to each adjacent natural root in this screening calculation.')
-    pick('root_access','Prosthetic access after trajectory correction',opts('ROOTACCESS',[('STRAIGHT','Straight screw-channel access feasible','Restoration-guided straight access possible without violating root safety.'),('ANGLED','Angled screw channel / abutment to evaluate','The planned implant axis is root-safe but the prosthetic access may need manufacturer-approved angulated components.'),('UNRESOLVED','Not yet assessable','Check wax-up, component availability, angulation limits and biomechanical factors.')],prefix='SUR'),'Angled restorative parts may compensate for screw-access direction, but never for an unsafe bone/adjacent-root trajectory.')
-    if r('root_3d_feasible')=='SUR-ROOT3D-NO':st.error('Unsafe 3D trajectory: no implant design or length should be cleared. Reconsider the surgical position or treatment strategy.')
-   else:clear('root_3d_feasible');clear('root_min_md');clear('root_access')
-   # The old multi-select of named structures was intentionally removed from the UI.
-   # Stale values are not reused after this release.
-   record.pop('anat_structures',None)
-   st.session_state.pop('ui_anat_structures',None)
-   pick('cbct_clearance','CBCT anatomical safety clearance',opts('CBCT',[('VERIFIED','Verified · relevant anatomical safety distances assessed','A clinician has reviewed the full planned trajectory, vital structures and drill-tip clearance.'),('REVIEW','Requires review / potential conflict','A structure, angulation or available height may limit safe placement.'),('UNKNOWN','Not yet verified','CBCT safety assessment is incomplete.')],prefix='SUR'),'A compact safety review replaces the previous anatomical-structure list. Verification must address the actual 3D path, critical structures, implant and drilling dimensions.')
-   if r('cbct_clearance')!='SUR-CBCT-VERIFIED':st.info('Anatomical safety is not yet verified: commercial length screening is not surgical clearance.')
+   if r('adjacent_roots')=='SUR-ROOTS-DILACERATED':notice('Dilacerated roots can alter the three-dimensional position of the implant by limiting the interradicular space; confirm on CBCT.')
+   if is_maxillary() or is_mandibular():
+    sopts=[]
+    if is_maxillary():sopts+=[('NASAL','Nasal floor','Limits the available vertical bone height at anterior maxillary sites.'),('INCISIVE','Incisive (nasopalatine) canal','Can limit the available width and displace the implant position or axis.')]
+    if is_mandibular():sopts+=[('IAN','Inferior alveolar canal (incl. variants)','Limits the available vertical bone height; a safety distance is required. Variants such as bifid canals can alter the available space.'),('MENTAL','Mental foramen','Limits the implant position and angulation in the premolar region.'),('MANDINC','Mandibular incisive canal','Can limit the available bone volume at anterior mandibular sites.'),('LINGFORAMEN','Lingual foramen / canal','Anterior mandible: risk of vascular injury if the lingual cortex is perforated; can limit the implant position.'),('LINGUAL','Lingual concavity (submandibular fossa)','May alter the axial inclination and increases the risk of lingual cortical perforation.')]
+    sopts+=[('RETAINED','Retained root or impacted tooth','Occupies bone at the site and can limit the available bone or the implant position.'),('LESION','Cystic or other radiolucent bone lesion','Can reduce the available bone and compromise primary stability.'),('EXOSTOSIS','Exostosis or torus','Can alter the ridge contour and the axial position of the implant.'),('HARDWARE','Previous hardware or foreign body','Fixation hardware, implant remnants or other material that can limit the bone available or the implant position.')]
+    sopts.append(('NONE','None relevant','No relevant anatomical structure identified near the site.'))
+    valid=[f'SUR-STRUCT-{k}' for k,_,_ in sopts]
+    record['anat_structures']=[c for c in (r('anat_structures',[]) or []) if c in valid]
+    if any(c not in valid for c in (st.session_state.get('ui_anat_structures') or [])):st.session_state.pop('ui_anat_structures',None)
+    pickmulti('anat_structures','Anatomical structures near the site',opts('STRUCT',sopts,prefix='SUR'),'Anatomical structures or local findings identified on CBCT that can limit the available bone or alter the three-dimensional or axial implant position.',none_code='SUR-STRUCT-NONE')
+    if any(c!='SUR-STRUCT-NONE' for c in (r('anat_structures',[]) or [])):st.info('Findings near the site can limit the available bone or alter the three-dimensional and axial implant position; confirm safety distances on CBCT.')
+   else:clear('anat_structures',to='list')
    st.caption('Informs: safety distances, necessary modifications and previous treatments.')
  with c3:
   with st.container(border=True):
@@ -1014,20 +906,6 @@ elif step==4:
  st.markdown('### Treatment Strategy & Implant Selection')
  st.markdown('<div class="tp-lead">Compare feasible treatment pathways first; then review implant design, exact catalog sizes and a preliminary restorative approach. The clinician makes the final decision.</div>',unsafe_allow_html=True)
  patient_context()
- surgical_access_,access_summary_=tp_surgical_access_guidance()
- loading_text_,loading_summary_=tp_loading_guidance()
- st.caption('Surgical access: '+access_summary_+' · Loading strategy: '+loading_summary_)
- if r('esthetic')=='No' and r('immediate_loading')=='IMP-IMMLD-YES':
-  st.warning('Non-esthetic case: conventional loading remains the first-line comparison. Immediate loading/provisionalization can still be discussed only if a separate indication and all stability/occlusal requirements are established.')
- space_review_=tp_restorative_space_screen()
- if space_review_['warnings']:
-  st.markdown('#### Restorative space alerts')
-  for alert_ in space_review_['warnings']:st.warning(alert_)
- root_review_=tp_root_screen()
- if root_review_['active']:
-  if root_review_['status']=='unsafe_trajectory':st.error('Dilacerated roots: CBCT indicates no safe prosthetically guided implant trajectory. An angled abutment cannot correct root collision.')
-  elif root_review_['status']=='pending':st.warning('Dilacerated roots: trajectory-specific CBCT clearance or minimum interradicular space is missing. Implant dimensions cannot yet be cleared.')
-  elif r('root_access')=='SUR-ROOTACCESS-ANGLED':st.info('A root-safe angled implant trajectory is being evaluated. Review a manufacturer-approved angled screw channel/abutment only after confirming prosthetic fit, axis correction limits and emergence.')
  if r('case_type')!='CASE-TYPE-SINGLE':
   notice('This working prototype generates paired proposals only for a single-tooth restoration. Other case types are preserved and will need their own pathway logic.')
  elif not r('teeth') or r('site') is None:
@@ -1086,8 +964,7 @@ elif step==4:
     pick('gbr_approach','Bone-regeneration approach under consideration',opts('GBR',[('NONE','No GBR planned',''),('SIMULT','Simultaneous GBR','Implant placement and localized bone regeneration in one intervention, only when all surgical conditions support it.'),('STAGED','Staged GBR before implant','Reconstruct first, reassess after healing and then choose implant design/dimensions.')],prefix='IMP'),'Select an intended approach to compare, not a permission to bypass constraints.')
     if r('gbr_approach')=='IMP-GBR-STAGED':pick('staged_status','Status of staged GBR',opts('STG',[('PENDING','Not yet performed','Implant selection must be deferred.'),('HEALED','Healed and reevaluated','The anatomical measurements refer to the healed augmented site.')],prefix='IMP'))
     else:clear('staged_status')
-    pick('immediate_loading','Immediate provisionalization or loading planned?',yesno('IMMLD'),'Conventional loading is the default comparison if esthetic concern = No. Immediate loading, if specifically chosen, still requires validated stability and occlusal criteria; esthetic concern alone is not a loading indication.')
-    if r('esthetic')=='No':st.caption('No esthetic concern: the CDSS will NOT prioritize an immediate protocol as its first plan, even when selected for discussion.')
+    pick('immediate_loading','Immediate provisionalization or loading planned?',yesno('IMMLD'),'A plan for loading does not establish primary stability; verify appropriate clinical thresholds and occlusal conditions.')
   support_=gbr_support()
   if support_:
    with st.expander('GBR decision support · simultaneous vs staged',expanded=False):
@@ -1121,7 +998,7 @@ elif step==4:
     with st.container(border=True):
      klass='tp-chip' if plan_['key']=='A' else 'tp-chip alt'
      st.markdown('<div class="'+klass+'">OPTION '+plan_['key']+'</div><div class="tp-head"><div class="tp-title">'+escape(plan_['title'])+'</div><div class="tp-sub">'+escape(plan_['subtitle'])+'</div></div>',unsafe_allow_html=True)
-     st.markdown('<div class="tp-slab"><h4>🩺 Surgical approach</h4><p>'+escape(plan_['surgery'])+'</p><p><b>Loading:</b> '+escape(plan_['loading'])+'</p></div>',unsafe_allow_html=True)
+     st.markdown('<div class="tp-slab"><h4>🩺 Surgical approach</h4><p>'+escape(plan_['surgery'])+'</p></div>',unsafe_allow_html=True)
      s_=plan_['sizes']
      dtext_=' | '.join('Ø'+tp_fmt(x) for x in s_['diameters'])+' mm' if s_['diameters'] else 'Pending measurements / no compatible diameter'
      ltext_=', '.join(str(x) for x in s_['lengths'])+' mm' if s_['lengths'] else 'Pending anatomy / no compatible length'
@@ -1136,16 +1013,14 @@ elif step==4:
       st.caption(s_['reason'])
   st.markdown('#### Patient-centered comparison')
   a_,b_=result_['plans']
-  # A native list of records is supported by st.dataframe; no pandas dependency needed.
-  comp_=[
+  import pandas as pd
+  comp_=pd.DataFrame([
    {'Criterion':'Surgical pathway','Option A':a_['title'],'Option B':b_['title']},
    {'Criterion':'Potential advantage','Option A':a_['pros'],'Option B':b_['pros']},
    {'Criterion':'Implant design','Option A':FAMILIES[a_['family']],'Option B':FAMILIES[b_['family']]},
    {'Criterion':'Dimensional screening','Option A':a_['size_display'],'Option B':b_['size_display']},
-   {'Criterion':'Loading priority','Option A':a_['loading'],'Option B':b_['loading']},
-   {'Criterion':'Surgical access','Option A':access_summary_,'Option B':access_summary_},
    {'Criterion':'Current limitations','Option A':a_['limits'],'Option B':b_['limits']},
-  ]
+  ])
   st.dataframe(comp_,hide_index=True,use_container_width=True)
   priorities_=[NEEDS[n] for n in (r('needs',[]) or []) if n in NEEDS]
   if priorities_:
@@ -1169,8 +1044,6 @@ elif step==4:
    st.markdown('**Working catalog:** BLC, BLX, BLT, TLC and TLX; each diameter is paired only with the lengths in the clinician-edited project matrix. Stock and IFU/SKU eligibility have not been independently verified.')
    st.markdown('**Minimum dimensional screening:** 1.5 mm facial, 1.0 mm palatal/lingual, 1.5 mm mesial and distal to natural roots. Thus width ≥ implant Ø + 2.5 mm, and mesiodistal space ≥ implant Ø + 3.0 mm. Use Ø3.75 mm as the posterior screening floor (Ø4.0 mm often preferred for molars), Ø3.3 mm anteriorly, with Ø2.9 mm allowed only for selected upper laterals and lower incisors. An esthetic facial target around 2 mm remains preferable. Confirm exact CBCT geometry, shoulder/platform dimensions and IFU.')
    st.markdown('**Initial length ceiling:** residual bone height − 2.0 mm, inherited from the original app as a provisional conservative screen. It is NOT a universal fixed anatomical safety margin and cannot replace site-specific 3D planning, drill-tip clearance or the actual manufacturer-approved protocol.')
-   st.markdown('**Restorative space thresholds:** 7 mm SRA and 6 mm Ti-base are working CDSS screening alerts, not universal product requirements; ~7.5 mm is reported for abutment-level fixed screw-retained prostheses in the 2019 restorative-space review. Measure crown-height space separately; >15 mm is a biomechanical review trigger based on Misch et al. Use actual component/IFU measurements.')
-   st.markdown('**3D root pathway:** for dilacerated roots, minimum interradicular space is measured along the proposed path, not only at crestal level. Manufacturer-approved angled abutments can address some restorative-axis differences but NEVER surgical root collisions.')
    st.markdown('**Short vs sinus:** shown only as a comparison concept for a posterior maxillary molar with reduced native bone height. A short implant is not considered feasible if no listed length passes the conservative initial screen; sinus pathology demands separate review.')
    for n_ in SAFETY_NOTES:st.markdown('- '+n_)
   references(4)
@@ -1185,9 +1058,6 @@ elif step==5:
    p_=result_['plans'][0 if selected_=='A' else 1]
    st.markdown('#### Working plan · Option '+selected_+' — '+p_['title'])
    st.info(p_['surgery'])
-   st.caption('Loading concept: '+p_['loading'])
-   if tp_root_screen()['active']:st.warning('Root dilaceration review: surgical axis and root clearance must be confirmed before clinical approval.')
-   if tp_restorative_space_screen()['warnings']:st.warning('Restorative space alerts from Step 03 remain active; finalize component selection before definitive surgical planning.')
    st.caption('Current status: '+p_['status']+'. This is a working pathway and not a clinical clearance.')
    if p_['post']:st.warning('Re-assess after augmentation/healing before specifying final implant dimensions.')
   else:
@@ -1223,10 +1093,6 @@ elif step==6:
  else:st.caption('The implant and its working strategy can be carried over from Step 05 after selection.')
  preview_retention_,preview_access_=tp_restoration_text()
  st.caption('Preliminary idea from Step 05: '+preview_retention_+' '+preview_access_)
- for alert_ in tp_restorative_space_screen()['warnings']:st.warning(alert_)
- if tp_root_screen()['active']:
-  st.info('Root dilaceration: a manufacturer-approved angled abutment/screw channel may be assessed only after a root-safe 3D implant axis is verified. It cannot compensate for root collision.')
- st.caption('Loading: '+tp_loading_guidance()[0])
  left,right=st.columns(2)
  with left:option('Straight screw access','Retrievability can support maintenance when implant trajectory and emergence allow.','Verify restorative space, axis, tissue profile and correct platform components.')
  with right:option('Angled screw access','A manufacturer-approved angled channel can sometimes preserve screw retention despite off-axis access.','Confirm the exact implant platform, component range and restorative space; it cannot compensate for unsafe implant positioning.')
@@ -1234,8 +1100,6 @@ elif step==6:
  choose('abutment_choice','Abutment or screw-channel configuration',['Undecided','Straight abutment / screw channel','Angled screw channel (if compatible)','Angled abutment (evaluate separately)','Custom abutment'])
  choose('material','Crown material',['Undecided','Monolithic zirconia','Metal-ceramic','Other'])
  choose('provisional','Provisional approach',['Undecided','No provisional','Interim prosthesis','Implant-supported provisional if feasible'])
- if r('esthetic')=='No' and r('provisional')=='Implant-supported provisional if feasible':
-  st.warning('Without a specific esthetic indication, an immediate implant-supported provisional is a secondary option. Document the benefit, occlusal design and validated primary-stability criteria.')
  field('restorative_rationale',st.text_area,'Restorative rationale and limitations',default='',placeholder='Screw access, emergence, retrievability, cement risks, restorative space, cleansability…')
  if r('pro_para') in ('PRO-PARA-SELF','PRO-PARA-SUSPECTED','PRO-PARA-BOTH'):notice('Reassess occlusal loading and protective strategies.')
  references(6)
