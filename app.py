@@ -107,6 +107,43 @@ h1{font-size:2.1rem!important;} h2{font-size:1.42rem!important;}
 </style>'''
 st.markdown(CSS, unsafe_allow_html=True)
 st.markdown("""<style>
+/* Compact tooth selector: scoped so navigation and form buttons stay unchanged. */
+.st-key-tooth_picker { max-width: 1040px; }
+.st-key-tooth_picker [data-testid="stButton"] button {
+  min-height: 2.15rem !important;
+  height: 2.15rem !important;
+  padding: .12rem .28rem !important;
+  border-radius: 9px !important;
+  font-size: .82rem !important;
+  letter-spacing: -.015em !important;
+  white-space: nowrap !important;
+  line-height: 1.1 !important;
+}
+.st-key-tooth_picker [data-testid="stButton"] button[kind="primary"] {
+  background-color: #C7CF58 !important;
+  border-color: #A9B13F !important;
+  color: #263246 !important;
+}
+.st-key-tooth_picker [data-testid="stButton"] button[kind="secondary"] {
+  border-color: #BCD6D6 !important;
+  background-color: #FBFDFD !important;
+}
+.st-key-tooth_picker [data-testid="stVerticalBlock"] { gap: .22rem !important; }
+.st-key-tooth_picker .tooth-quadrant-label {
+  font-size: .75rem;
+  letter-spacing: .015em;
+  font-weight: 700;
+  color: #526879;
+  margin: .35rem 0 .05rem;
+}
+.st-key-tooth_picker .tooth-help {
+  font-size: .78rem;
+  color: #607384;
+  margin: .1rem 0 .3rem;
+}
+</style>""",unsafe_allow_html=True)
+
+st.markdown("""<style>
 [data-testid="stSidebar"] {background:#FFFFFF!important}
 .patient-panel {border:1px solid #DCE8E9;border-radius:14px;padding:14px;background:#FFFFFF;margin:10px 0}
 .priority-panel {border-left:5px solid #C7CF58;background:#FAFCEB;border-radius:10px;padding:12px;margin:10px 0}
@@ -1162,8 +1199,8 @@ elif step==1:
   choose('arch','Edentulous arch',['Maxilla','Mandible'])
   st.caption('Full-arch treatment planning is outside the current single-tooth prototype.')
  else:
-  st.markdown('**Interactive odontogram · Select missing teeth**')
-  st.caption('Click a tooth to select or deselect it. Each tile shows Universal / FDI numbering (for example, 3 / 16). Selected tiles are highlighted in lime green.')
+  st.markdown('**Tooth selection**')
+  st.caption('Universal / FDI · Select or deselect teeth. Selected teeth appear in lime.')
   if case_type=='CASE-TYPE-SINGLE' and len(r('teeth',[]))>1:
    record['teeth']=r('teeth',[])[:1]
   def toggle_tooth(fdi):
@@ -1178,15 +1215,16 @@ elif step==1:
    else:
     current.append(fdi)
    record['teeth']=current
-  for qname,teeth in QUADRANTS:
-   st.caption(qname)
-   columns=st.columns(8)
-   for col,(fdi,universal) in zip(columns,teeth):
-    with col:
-     selected=fdi in record.get('teeth',[])
-     st.button(f'{universal} / {fdi}',key=f'odon_{fdi}',type='primary' if selected else 'secondary',use_container_width=True,on_click=toggle_tooth,args=(fdi,))
-  chosen=record.get('teeth',[])
-  st.write('**Selected teeth:** '+(', '.join(f'{FDI_UNI[fdi]} / {fdi}' for fdi in chosen) if chosen else 'None selected'))
+  with st.container(key='tooth_picker'):
+   for qname,teeth in QUADRANTS:
+    st.markdown('<div class="tooth-quadrant-label">'+escape(qname)+'</div>',unsafe_allow_html=True)
+    columns=st.columns(8,gap='small')
+    for col,(fdi,universal) in zip(columns,teeth):
+     with col:
+      selected=fdi in record.get('teeth',[])
+      st.button(f'{universal} / {fdi}',key=f'odon_{fdi}',type='primary' if selected else 'secondary',use_container_width=True,on_click=toggle_tooth,args=(fdi,))
+   chosen=record.get('teeth',[])
+   st.markdown('**Selected teeth:** '+(', '.join(f'{FDI_UNI[fdi]} / {fdi}' for fdi in chosen) if chosen else 'None selected'))
   if case_type=='CASE-TYPE-SHORT':st.caption('Short Span allows up to three teeth. To select another, deselect one first.')
  choose('esthetic','Does this case involve an esthetic concern?',['No','Yes'])
  pick('mouth_opening','Maximal mouth opening',opts('MOUTH',[('OPTIMAL','Optimal','Opening sufficient for surgical and restorative instrument access.'),('LIMITED','Limited','Opening that restricts access for surgical or restorative instrumentation (e.g., posterior sites, guided surgery).')],prefix='CASE'),'Assessment of whether the maximal mouth opening allows adequate access for the planned surgery and restoration.')
