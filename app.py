@@ -954,8 +954,6 @@ def tp_build_plans():
     p['status']=('Simultaneous GBR not supported by screening criteria' if sup['verdict']=='staged' else 'Simultaneous GBR suitability pending review')
   if mode=='sinus' and r('sinus') in ('SUR-SINUS-POSSIBLE','SUR-SINUS-TREATED'):
    p['status']='Sinus condition requires assessment before pathway selection'
-  if r('cbct_clearance')!='SUR-CBCT-VERIFIED':
-   p['status']+=' · anatomical safety clearance pending'
   if tp_restorative_space_screen()['warnings']:
    p['status']+=' · restorative space review required'
   if root_check['active'] and r('root_access') in (None,'SUR-ROOTACCESS-UNRESOLVED'):
@@ -1156,9 +1154,9 @@ elif step==3:
    # Stale values are not reused after this release.
    record.pop('anat_structures',None)
    st.session_state.pop('ui_anat_structures',None)
-   pick('cbct_clearance','CBCT anatomical safety clearance',opts('CBCT',[('VERIFIED','Verified · relevant anatomical safety distances assessed','A clinician has reviewed the full planned trajectory, vital structures and drill-tip clearance.'),('REVIEW','Requires review / potential conflict','A structure, angulation or available height may limit safe placement.'),('UNKNOWN','Not yet verified','CBCT safety assessment is incomplete.')],prefix='SUR'),'A compact safety review replaces the previous anatomical-structure list. Verification must address the actual 3D path, critical structures, implant and drilling dimensions.')
-   if r('cbct_clearance')!='SUR-CBCT-VERIFIED':st.info('Anatomical safety is not yet verified: commercial length screening is not surgical clearance.')
-   st.caption('Informs: safety distances, necessary modifications and previous treatments.')
+   # Retired CBCT-clearance selector; keep unknown values from affecting recommendations.
+   record.pop('cbct_clearance',None)
+   st.session_state.pop('ui_cbct_clearance',None)
  with c3:
   with st.container(border=True):
    st.markdown('<div class="col-title">Bone Deficiencies &amp; Surgical Considerations</div><div class="col-desc">Can the implant be placed correctly, with sufficient bone support?</div>',unsafe_allow_html=True)
