@@ -171,10 +171,7 @@ CASE_TYPES = {
 SITE = {
  'CASE-SITE-EXTRACT':'Tooth present and requiring extraction',
  'CASE-SITE-SOFT':'Edentulous ridge · soft tissue healing (4–8 weeks post-extraction)',
-  'CASE-SITE-VERYEARLY':'Extraction completed · less than 4 weeks',
-  'CASE-SITE-INTERVAL1':'Extraction completed · more than 8 to less than 12 weeks',
  'CASE-SITE-PARTIAL':'Edentulous ridge · partial bone healing (12–16 weeks post-extraction)',
-  'CASE-SITE-INTERVAL2':'Extraction completed · more than 16 weeks to 6 months',
  'CASE-SITE-HEALED':'Completely healed edentulous ridge (>6 months post-extraction)'
 }
 # Universal / FDI equivalences for permanent teeth (numeric pairs).
@@ -873,53 +870,15 @@ def tp_augmentation_summary():
  if not lines:lines.append('No augmentation screening trigger detected in the recorded measurements; verify 3D anatomy and tissue suitability.')
  return lines
 
-# Compact preoperative history; all values are patient-reported, not diagnostic.
-MEDICAL_RISK_OPTIONS = {
- 'NONE': 'No known relevant medical history / risk factors',
- 'PERIO': 'History of periodontitis',
- 'DIABETES': 'Diabetes mellitus',
- 'TOBACCO': 'Tobacco / nicotine use',
- 'CARDIO': 'Cardiovascular disease / hypertension',
- 'IMMUNE': 'Immunosuppression / impaired healing',
- 'ANTIR': 'Antiresorptive or antiangiogenic medication',
- 'RADIATION': 'Head / neck radiotherapy',
- 'ANTICOAG': 'Anticoagulant / antiplatelet medication',
- 'HYGIENE': 'Difficulty maintaining oral hygiene',
- 'OTHER': 'Other relevant medical condition or medication',
-}
-MAJOR_MEDICAL_FLAGS={'IMMUNE','ANTIR','RADIATION'}
-
-def tp_medical_alerts():
- flags=set(r('medical_risk_factors',[]) or [])
- if not flags or 'NONE' in flags and len(flags)>1:return []
- alerts=[]
- if flags & MAJOR_MEDICAL_FLAGS:
-  alerts.append('Medical risk factors requiring individualized implant-surgery assessment: '+', '.join(MEDICAL_RISK_OPTIONS[x] for x in sorted(flags & MAJOR_MEDICAL_FLAGS))+'. Review current therapy, dose/route/timing when relevant and interdisciplinary clearance as indicated; the CDSS cannot confirm surgical eligibility.')
- if 'ANTICOAG' in flags:
-  alerts.append('Review bleeding risk and current medication with the treating physician when indicated; do not advise stopping prescribed therapy automatically.')
- if 'CARDIO' in flags:
-  alerts.append('Review the relevant cardiovascular condition and medical fitness before surgery.')
- if 'OTHER' in flags:
-  alerts.append('Review the additional medical history entered by the clinician before finalizing the treatment plan.')
- return alerts
-
 def tp_maintenance_guidance():
- # A blank answer must never mean that the patient has no risk factors.
- flags=set(r('medical_risk_factors',[]) or [])
- if not flags or ('NONE' in flags and len(flags)>1):
-  return 'Maintenance interval pending: patient-reported medical history / risk factors have not been completed or contain conflicting selections.'
- if 'DIABETES' in flags and r('diabetes_control') in (None, 'Control unknown'):
-  return 'Maintenance interval pending: clarify patient-reported diabetes control.'
- if 'TOBACCO' in flags and r('smoking_status') in (None, 'Status unknown'):
-  return 'Maintenance interval pending: clarify tobacco exposure.'
- if flags & MAJOR_MEDICAL_FLAGS:
-  return 'Individualized maintenance required: medical risk warrants additional review. Do not assign a recall interval from the medical history alone.'
- higher=('PERIO' in flags or 'HYGIENE' in flags or
-         ('TOBACCO' in flags and r('smoking_status')=='Current tobacco use') or
-         ('DIABETES' in flags and r('diabetes_control')=='Diabetes: not well controlled'))
- if higher:
-  return 'Consider supportive peri-implant maintenance every 3–4 months initially, subject to periodontal examination, plaque control and reassessment.'
- return 'Consider supportive peri-implant maintenance every 4–6 months, individualized after periodontal evaluation and re-evaluated over time.'
+ # Missing medical history must not be interpreted as a low-risk patient.
+ conditions=[r('history_periodontitis'),r('smoking_status'),r('diabetes_control'),r('hygiene_ability')]
+ if any(x is None for x in conditions):
+  return 'Recall interval pending a structured patient-risk assessment (periodontal history, tobacco exposure, diabetes control and hygiene capacity). Age alone is not a recall criterion.'
+ high=(r('history_periodontitis')=='PAT-PERIO-YES' or r('smoking_status')=='Current tobacco use'
+       or r('diabetes_control')=='Diabetes: not well controlled' or r('hygiene_ability')=='Difficult')
+ if high:return 'Consider supportive peri-implant maintenance every 3–4 months initially; re-evaluate according to actual periodontal/peri-implant findings and plaque control.'
+ return 'Consider supportive peri-implant maintenance every 4–6 months, individualized following baseline clinical assessment and reviewed over time.'
 
 def tp_build_plans():
  'Two comparative pathways; unresolved/unfeasible ideas are clearly labeled.'
@@ -1085,26 +1044,11 @@ if step==0:
   ranked=field('top_priority',st.selectbox,'Most important concern',default=NO_PRIORITY,options=prio_opts,format_func=lambda k:PRIORITY_LABELS[k])
   if r('top_priority')==NO_PRIORITY:st.caption('No single priority is highlighted; the selected concerns are shown without ranking.')
   else:st.caption('This priority influences how viable plans are compared, not clinical eligibility.')
- st.markdown('**Medical history & risk factors**')
- st.caption('Patient-reported · select all that apply. Leave blank only if the history has not yet been assessed.')
- field('medical_risk_factors',st.multiselect,'Relevant medical history / risk factors',default=[],options=list(MEDICAL_RISK_OPTIONS),format_func=lambda c:MEDICAL_RISK_OPTIONS[c],placeholder='Select conditions or No known relevant history')
- medical_flags=set(r('medical_risk_factors',[]) or [])
- if 'NONE' in medical_flags and len(medical_flags)>1:
-  notice('“No known relevant medical history” cannot be selected together with a risk factor. Please correct the selection.')
- if 'DIABETES' in medical_flags:
-  field('diabetes_control',st.selectbox,'Diabetes control (patient-reported)',default=None,options=['Diabetes: well controlled','Diabetes: not well controlled','Control unknown'],index=None,placeholder='Select only if known')
- else:
-  clear('diabetes_control')
- if 'TOBACCO' in medical_flags:
-  field('smoking_status',st.selectbox,'Tobacco use',default=None,options=['Current tobacco use','Former tobacco use','Status unknown'],index=None,placeholder='Select only if known')
- else:
-  clear('smoking_status')
- if 'OTHER' in medical_flags:
-  field('medical_other_details',st.text_input,'Other condition / medication (optional)',default='',placeholder='Brief description')
- else:
-  clear('medical_other_details')
- for medical_alert in tp_medical_alerts():
-  st.warning(medical_alert)
+ st.markdown('**Patient-reported risk factors for maintenance planning**')
+ pick('history_periodontitis','History of periodontitis',opts('PERIO',[('YES','Yes',''),('NO','No','')],prefix='PAT'),'Patient history only. Confirm periodontal condition clinically when available.')
+ field('smoking_status',st.selectbox,'Tobacco exposure',default=None,options=['Never','Former tobacco use','Current tobacco use'],index=None,placeholder='Not reported')
+ field('diabetes_control',st.selectbox,'Diabetes history / reported control',default=None,options=['No known diabetes','Diabetes: well controlled','Diabetes: not well controlled'],index=None,placeholder='Not reported')
+ field('hygiene_ability',st.selectbox,'Patient-reported ability to maintain oral hygiene',default=None,options=['Adequate','Difficult'],index=None,placeholder='Not reported')
  if r('age')=='PAT-AGE-U18':notice('Assess completion of craniofacial growth; avoid assuming implant eligibility from chronological age alone.')
  if r('age')=='PAT-AGE-O60P':st.info('Evaluate individual dexterity, medical status and maintenance needs; age alone is not a contraindication.')
 
@@ -1142,8 +1086,6 @@ elif step==1:
   if case_type=='CASE-TYPE-SHORT':st.caption('Short Span allows up to three teeth. To select another, deselect one first.')
  choose('esthetic','Does this case involve an esthetic concern?',['No','Yes'])
  pick('mouth_opening','Maximal mouth opening',opts('MOUTH',[('OPTIMAL','Optimal','Opening sufficient for surgical and restorative instrument access.'),('LIMITED','Limited','Opening that restricts access for surgical or restorative instrumentation (e.g., posterior sites, guided surgery).')],prefix='CASE'),'Assessment of whether the maximal mouth opening allows adequate access for the planned surgery and restoration.')
- if r('mouth_opening') is not None:
-  st.info(tp_surgical_access_guidance()[0])
  field('site',st.selectbox,'Current site condition',default=None,options=list(SITE),format_func=lambda c:SITE[c],index=None,placeholder='Select…')
  if r('site')=='CASE-SITE-EXTRACT':st.info('Tooth is still present. Evaluate extraction considerations and potential timing options later; Type 1 is not assumed.')
 
@@ -1265,8 +1207,6 @@ elif step==3:
  st.info('No implant is cleared based on height or width alone. Anatomy, safety distances and manufacturer dimensions require independent assessment.')
 
 elif step==4:
- for medical_alert in tp_medical_alerts():
-  st.warning(medical_alert)
  # Module 05: clinical comparison first. Keep surgical screening in the logic,
  # not as noisy three-column 'not triggered' cards.
  root_review_=tp_root_screen()
@@ -1482,7 +1422,6 @@ else:
  c.metric('Bone width',f"{r('ridge_width')} mm" if r('ridge_width') is not None else 'Unknown')
  st.write('**Age group:**',AGES.get(r('age'),'Not entered'))
  st.write('**Needs:**',', '.join(NEEDS.get(x,x) for x in r('needs',[])) or 'Not entered')
- st.write('**Patient-reported medical history:**', ', '.join(MEDICAL_RISK_OPTIONS.get(x,x) for x in r('medical_risk_factors',[]) or []) or 'Not assessed')
  st.write('**Case:**',CASE_TYPES.get(r('case_type')))
  st.write('**Teeth (FDI):**',(', '.join(r('teeth',[])) or 'Not selected') if r('case_type')!='CASE-TYPE-EDENT' else r('arch','Unknown'))
  st.write('**Esthetic concern:**',r('esthetic','Not entered'))
