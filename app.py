@@ -875,7 +875,7 @@ def tp_prosthetic_components(plan):
  else:connection='TorcFit · verify the exact bone-level or tissue-level platform and matching library'
  if multiple:
   concept='Screw-retained zirconia restoration on SRA'
-  abutment='SRA · gingival height (GH) ≥2 mm'
+  abutment='Straumann SRA'
   height=('Candidate GH 2.5 mm or higher, if soft tissues, angulation, platform and available catalog configuration permit.' if family in ('IMP-FAM-BLC','IMP-FAM-BLX') else 'Select a catalog-listed compatible GH ≥2 mm after evaluating tissues and the exact platform; no exact height selected.')
   retention='Screw-retained at abutment level'
  else:
@@ -883,7 +883,8 @@ def tp_prosthetic_components(plan):
   abutment='Ti-base · Straumann Variobase for Crown'
   height='Gingival height and bonding-chimney height pending soft-tissue, restorative-space and component-library assessment; these are separate measurements.'
   retention='Cemented extraorally · screw-retained'
- return dict(multiple=multiple,concept=concept,abutment=abutment,height=height,retention=retention,connection=connection)
+ dimensions=('GH ≥2.5 mm · candidate, verify tissues/platform' if family in ('IMP-FAM-BLC','IMP-FAM-BLX') else 'GH ≥2 mm · exact catalog size pending') if multiple else 'GH pending · bonding-post height pending'
+ return dict(multiple=multiple,concept=concept,abutment=abutment,height=height,dimensions=dimensions,retention=retention,connection=connection)
 
 def tp_restoration_text():
  retention=r('preview_retention')
@@ -1083,8 +1084,8 @@ def tp_row_content(plan,row):
  elif row=='Prosthetic approach':
   immediate=(protocol['code'] or '').endswith('A')
   component=tp_prosthetic_components(plan)
-  heading='<strong>'+escape(component['concept'])+'</strong>'
-  visible='<div>'+escape(component['abutment'])+'</div><div>'+escape(component['retention'])+'</div>'
+  heading='<div><strong>Retention:</strong> '+escape(component['retention'])+'</div>'
+  visible='<div><strong>Abutment:</strong> '+escape(component['abutment'])+' · '+escape(component['dimensions'])+'</div><div><strong>Material:</strong> Zirconia (ZR)</div>'
   if immediate:visible+='<small>Immediate provisional: PMMA</small>'
   sections=[('Why',protocol['loading']),('Definitive material','Zirconia (ZR) is the selected project restorative concept. Confirm restoration span, connector dimensions, material thickness, opposing dentition, load and manufacturer indications; it is not mandated by the placement/loading code.'),('Abutment & library',component['abutment']+'. '+component['connection']+'. '+component['height']+' Select the actual Straumann CAD/CAM library, scanbody, interface and compatible screw; no component SKU is inferred from family alone.'),('Retention',component['retention']+'. '+('Use compatible non-engaging bridge/bar copings or titanium interfaces on the selected SRA when required by the restoration workflow. Do not substitute an engaging single-crown component.' if component['multiple'] else 'Bond the zirconia crown onto the titanium base outside the mouth, remove residual cement and screw the bonded assembly to the implant. This does not mean cementing a crown intraorally onto an implant abutment. Follow the component, resin-cement and zirconia IFUs.')),('Height rule','The GH ≥2 mm preference for multiple-unit SRA restorations is a project rule, not a universal Straumann minimum. GH is the transmucosal/gingival height, not the bonding-post height. TorcFit bone-level SRA configurations include GH 1.5, 2.5, 3.5 and 4.5 mm; therefore an exact 2 mm component must not be invented.'),('Provisional & loading',protocol['provisional']+' PMMA is retained for immediate provisionalization; definitive zirconia is a later restorative stage. Distinguish immediate non-functional restoration from functional loading; primary stability is confirmed during surgery only.'),('Restorative access',' '.join(tp_restoration_text())+' The displayed ZR/Variobase or SRA concept is a suggested default; any clinician-entered alternative retention remains an explicit item for review.'),('Space requirements','Verify tissue contour, restorative clearance, titanium bonding surface and actual IFU dimensions before selecting the final component height.')]
   sources=[('Straumann · Variobase and Variobase XC, technical information','https://www.straumann.com/content/dam/media-center/straumann/en/documents/brochure/technical-information/702087-en_low.pdf'),('Straumann · iEXCEL prosthetic procedures','https://www.straumann.com/content/dam/media-center/straumann/en/documents/brochure/technical-information/707744-en_low.pdf'),CLINICAL_SOURCES['protocol']]
