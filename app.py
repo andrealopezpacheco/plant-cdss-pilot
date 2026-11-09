@@ -1498,46 +1498,9 @@ elif step==4:
   for row_ in ('Placement & loading protocol','Implant selection','Surgical approach','Prosthetic approach','Maintenance protocol'):
    rows_+='<tr><th scope="row">'+escape(row_)+'</th>'+''.join('<td>'+tp_row_content(plan_,row_)+'</td>' for plan_ in comparison_plans_)+'</tr>'
   st.markdown('<style>.strategy-info{margin-top:8px}.strategy-info summary{display:inline-block;cursor:pointer;color:#347C7A;font-size:1.1rem;line-height:1.2;list-style:none}.strategy-info summary::-webkit-details-marker{display:none}.strategy-info summary:focus-visible{outline:2px solid #489595;outline-offset:3px}.strategy-info-content{background:#F5F9F9;border:1px solid #D4E4E5;border-radius:10px;padding:12px;margin-top:7px;font-weight:400}.strategy-info-content h5{font-size:.8rem;margin:9px 0 4px;color:#245C5B}.strategy-info-content a{color:#246D70}.strategy-alert{display:block;color:#8A5014;background:#FFF4DF;border-radius:6px;padding:4px 7px;margin-top:6px;font-size:.75rem}.protocol-highlight{display:inline-block;border:2px solid #489595;border-radius:14px;background:#E7F3F2;color:#245C5B;font-weight:800;font-size:2.6rem;line-height:1.2;padding:12px 24px;margin-bottom:8px}.protocol-meaning{font-size:.78rem;color:#527080;margin-bottom:10px}.implant-inline{display:flex;align-items:center;gap:14px}.implant-copy{flex:1;min-width:0}.official-implant{display:block;width:70px;height:100px;object-fit:contain;flex:0 0 70px;margin:0}.implant-family-name{font-size:1.05rem;font-weight:750;color:#245C5B}.implant-dimensions{font-size:1.1rem;font-weight:700;margin-top:7px}.strategy-scroll{overflow-x:auto;margin:12px 0 20px}.strategy-table{width:100%;min-width:740px;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #D4E4E5;border-radius:14px;overflow:hidden;font-size:.88rem;color:#273B4A}.strategy-table th,.strategy-table td{padding:16px;vertical-align:top;border-bottom:1px solid #DDE8EA;border-right:1px solid #DDE8EA;overflow-wrap:anywhere}.strategy-table thead th{background:#E7F3F2;text-align:left;font-size:1rem}.strategy-table thead th:first-child{width:19%}.strategy-table tbody th{background:#F5F9F9;text-align:left;font-size:.86rem}.strategy-table td{background:white}.strategy-table p{margin:0 0 8px;font-size:.86rem;line-height:1.5}.strategy-table small{display:block;font-weight:400;margin-top:6px;color:#58717B;font-size:.8rem}.strategy-table tr:last-child>*{border-bottom:0}.strategy-table tr>*:last-child{border-right:0}.strategy-option{font-size:.75rem;letter-spacing:.08em;color:#347C7A}</style><div class="strategy-scroll"><table class="strategy-table"><thead><tr>'+header_+'</tr></thead><tbody>'+rows_+'</tbody></table></div>',unsafe_allow_html=True)
-  st.caption('ⓘ Click for rationale, measurements, conditions and sources.')
   for plan_ in comparison_plans_:
    critical_=plan_['screening_blocked'] or 'requires assessment' in plan_['status'] or 'review required' in plan_['status'] or 'pending' in plan_['status'].lower()
    if critical_:st.warning('Option '+plan_['key']+' · '+plan_['status'])
-  # Keep choices editable without obstructing the treatment comparison.
-  with st.expander('Edit clinical decisions · CTG, FGG, GBR, loading & restoration',expanded=False):
-   st.caption('These questions influence the two proposed pathways. Unanswered fields remain unknown; an unknown finding is never treated as adequate anatomy.')
-   cs,ct=st.columns(2)
-   yesno=lambda v:opts(v,[('YES','Yes',''),('NO','No','')],prefix='IMP')
-   with cs:
-    pick('ctg_planned','Clinician decision: simultaneous CTG?',yesno('CTG'),'This does not erase an automatic CTG assessment trigger. CTG can add volume but predictable vertical STH gain cannot be assumed.')
-    pick('fgg_timing','Clinician decision: keratinized-tissue augmentation',opts('FGG',[('REVIEW','Undecided / review FGG or alternatives',''),('SIMULT','Consider FGG simultaneous',''),('STAGED','Consider FGG before implant placement',''),('LATER','Consider FGG after restoration / placement',''),('NO','Not planned (document rationale)','')],prefix='IMP'),'FGG is primarily used to increase keratinized mucosa; the exact approach is influenced by site and treatment stage.')
-    st.caption('STH is evaluated automatically using the clinician-defined <2.0 mm review trigger; the numeric measurement comes from Surgical Assessment. Vertical graft outcome is not assumed.')
-    st.caption('Immediate-placement eligibility is screened automatically from site timing and CBCT information; no surgical outcome is requested.')
-    clear('immediate_placement')
-   with ct:
-    pick('gbr_approach','Bone-regeneration approach under consideration',opts('GBR',[('NONE','No GBR planned',''),('SIMULT','Simultaneous GBR','Implant placement and localized bone regeneration in one intervention, only when all surgical conditions support it.'),('STAGED','Staged GBR before implant','Reconstruct first, reassess after healing and then choose implant design/dimensions.')],prefix='IMP'),'Select an intended approach to compare, not a permission to bypass constraints.')
-    if r('gbr_approach')=='IMP-GBR-STAGED':pick('staged_status','Status of staged GBR',opts('STG',[('PENDING','Not yet performed','Implant selection must be deferred.'),('HEALED','Healed and reevaluated','The anatomical measurements refer to the healed augmented site.')],prefix='IMP'))
-    else:clear('staged_status')
-    st.caption('Loading candidates are generated from preoperative findings and patient priorities. Primary stability will only be confirmed intraoperatively.')
-    clear('immediate_loading')
-    if r('esthetic')=='No':st.caption('No esthetic concern: the CDSS will NOT prioritize an immediate protocol as its first plan, even when selected for discussion.')
-   support_=gbr_support()
-   if support_:
-    with st.container(border=True):
-     st.caption('Defect size alone does not decide timing; morphology, positioning, stability and closure matter.')
-     ac,bc=st.columns(2)
-     for i_,(k_,lab_,c_) in enumerate(GBR_CRITERIA):
-      with (ac if i_%2==0 else bc):pick(k_,lab_,opts(c_,[('YES','Yes',''),('NO','No','')],prefix='IMP'))
-     support_=gbr_support()
-     for t_ in support_['notes']:st.write('• '+t_)
-     if support_['failed']:st.warning('Criteria not met: '+', '.join(support_['failed']))
-     st.caption('GBR screening: '+support_['verdict']+'. This is guidance, not a surgical clearance.')
-   st.markdown('**Preliminary restorative decisions**')
-   rc1,rc2=st.columns(2)
-   with rc1:
-    field('preview_retention',st.selectbox,'Preferred retention concept',default=None,options=['TP-RET-SCREW','TP-RET-SCREWMENT','TP-RET-CEMENT'],format_func=lambda x:{'TP-RET-SCREW':'Screw-retained','TP-RET-SCREWMENT':'Screw-cement retained / screwmentable','TP-RET-CEMENT':'Cement-retained'}[x],index=None,placeholder='To be evaluated')
-   with rc2:
-    field('preview_access',st.selectbox,'Screw-access path',default=None,options=['TP-ACC-STRAIGHT','TP-ACC-ANGLED'],format_func=lambda x:{'TP-ACC-STRAIGHT':'Straight screw channel','TP-ACC-ANGLED':'Angled screw channel'}[x],index=None,placeholder='Not yet assessed')
-
   st.markdown('#### Select a pathway to investigate')
   st.caption('No pathway is automatically prescribed or approved. Choose a working strategy for review, or leave the decision open.')
   choice_=field('treatment_path',st.selectbox,'Treatment pathway to investigate',default=None,options=['A','B'],format_func=lambda v:'Option '+v+' · '+result_['plans'][0 if v=='A' else 1]['title'],index=None,placeholder='No decision yet')
