@@ -550,7 +550,7 @@ def tp_clinical_summary():
  soft_issue=(sth is not None and sth<2) or soft=='SUR-STT-DEFICIENT' or kt=='SUR-KT-DEFICIENT'
  if bone_defect or (bone_known and not bone_width_ok) or short_review:
   bone_state='watch'
- elif bone_known and r('cbct_clearance')=='SUR-CBCT-VERIFIED':
+ elif bone_known:
   bone_state='ok'
  else:bone_state='pending'
  if soft_issue:soft_state='watch'
