@@ -740,6 +740,75 @@ def tp_family_pair(level):
  if r('immediate_placement')=='IMP-IMMPL-YES':return 'IMP-FAM-BLT','IMP-FAM-BLX'
  return 'IMP-FAM-BLC','IMP-FAM-BLT'
 
+def tp_anatomical_guidance():
+ """Location-specific CBCT review inside proposals; NO additional clinician input.
+
+ Measurements are user-entered and cannot establish 3D distance to an anatomical
+ structure unless that structure is the actual measurement reference. No
+ patient-specific clearance is inferred from tooth number alone.
+ """
+ teeth=r('teeth',[]) or []
+ if r('case_type')=='CASE-TYPE-EDENT':
+  arch=r('arch')
+  label='Edentulous '+str(arch or 'arch')
+  msg=('Mandible: identify inferior alveolar canals, mental foramina, anterior loops and lingual concavities along EACH planned implant trajectory.' if arch=='Mandible' else
+       'Maxilla: evaluate sinus and nasal floors, nasopalatine canal and site-specific residual bone along EACH proposed implant trajectory.' if arch=='Maxilla' else
+       'Identify the arch and the limiting anatomy for each proposed implant trajectory.')
+  return dict(region=label,structure='Multiple site-specific anatomical structures',margin=None,review=msg,
+              calculation='No universal length ceiling for a full arch; review each implant site individually.',limited=True)
+ if not teeth:
+  return dict(region='Unspecified site',structure='Not determined',margin=None,
+              review='Select the tooth/region in Case Type & Site to identify the relevant structures.',
+              calculation='No site-specific anatomical clearance can be estimated.',limited=True)
+ t=str(teeth[0]); quadrant=t[0] if len(t)==2 else ''; pos=t[-1]
+ multiple=len(teeth)>1
+ prefix=('Multiple teeth selected: this review uses the first selected tooth '+t+'. Assess every additional site independently. ' if multiple else '')
+ if quadrant in '34' and pos in '45678':
+  premolar=pos in '45'
+  return dict(region='Mandibular '+('premolar' if premolar else 'posterior'),
+    structure=('Inferior alveolar canal; mental foramen and possible anterior loop' if premolar else 'Inferior alveolar canal (IAC); lingual concavity'),margin=2.0,
+    review=prefix+('Identify the mental foramen and map any anterior loop in 3D; a vertical height measurement cannot establish nerve clearance.' if premolar else 'Confirm the superior IAC boundary and evaluate lingual undercut and cortical perforation risk in CBCT.'),
+    calculation='A 2 mm margin is a preliminary screen ONLY if the entered height was measured from crest to the relevant nerve boundary along the proposed implant axis. The anterior loop requires separate 3D mapping.' if premolar else 'A 2 mm margin is a preliminary screen ONLY if residual height is measured from crest to the superior IAC border along the proposed implant axis.',limited=premolar or multiple)
+ if quadrant in '34':
+  return dict(region='Mandibular anterior',structure='Lingual cortical concavity; incisive canal / nearby mental foramen where relevant',margin=None,
+   review=prefix+'Review lingual plate, mandibular incisive canal and any nearby mental neurovascular anatomy in CBCT. Do not infer a nerve-safety distance from the tooth number.',
+   calculation='No universal structure-based vertical deduction is available from the entered height alone.',limited=True)
+ if quadrant in '12' and pos in '45678':
+  return dict(region='Maxillary posterior',structure='Maxillary sinus floor; adjacent nasal floor if applicable',margin=2.0,
+   review=prefix+'Check sinus health, local anatomy and the implant trajectory. Sinus-floor elevation follows a separate treatment pathway if indicated.',
+   calculation='A 2 mm no-sinus-elevation screening allowance is a conservative PROJECT assumption, not a universal safety margin. It applies only if the height was measured to the sinus floor along the proposed implant axis.',limited=multiple)
+ if quadrant in '12':
+  return dict(region='Maxillary anterior',structure='Nasal floor; nasopalatine canal; facial bone plate',margin=None,
+   review=prefix+'Evaluate the nasal floor, nasopalatine canal, buccal plate and prosthetically driven 3D trajectory.',
+   calculation='No universal height subtraction establishes safe implant length in this region; the limiting anatomy must be identified in CBCT.',limited=True)
+ return dict(region='Site not classified',structure='Individual CBCT review needed',margin=None,
+             review=prefix+'Assess the limiting anatomical structures in three dimensions.',
+             calculation='No location-specific screening calculation available.',limited=True)
+
+
+def tp_anatomical_proposal_text(plan):
+ """Readable, explicitly conditional summary; never declare anatomical clearance."""
+ a=tp_anatomical_guidance()
+ h=r('ridge_height')
+ items=['Region: '+a['region'], 'Relevant anatomy: '+a['structure'], a['review']]
+ if h is None:
+  items.append('Residual bone height not entered; no vertical screening calculation possible.')
+ elif a['margin'] is None:
+  items.append('Entered residual height: '+tp_fmt(h)+' mm. '+a['calculation'])
+ else:
+  cap=h-a['margin']
+  items.append('Entered residual height: '+tp_fmt(h)+' mm; conditional screening allowance: '+tp_fmt(a['margin'])+' mm; numerical ceiling: '+(tp_fmt(cap)+' mm' if cap>0 else 'no positive length')+'. '+a['calculation'])
+ if plan.get('post'):
+  items.append('Implant dimensions must be reassessed after staged augmentation; these preoperative calculations are not post-graft clearance.')
+ else:
+  pick=plan.get('sizes',{}).get('pick')
+  if pick:
+   items.append('Candidate '+tp_fmt(pick[1])+' mm length passes the numerical filter only; verify actual 3D clearance, insertion depth, drill-tip extension and the manufacturer IFU.')
+  else:
+   items.append('No implant length is established from the current screened data.')
+ return items
+
+
 def tp_sizes(family,post_augmentation=False,short_only=False):
  'Dimensional screening only, never an implant clearance or full 3D CBCT analysis.'
  info=tp_site_info()
@@ -944,6 +1013,7 @@ def tp_build_plans():
    p['surgery']+=' Assess FGG or another technique for inadequate keratinized mucosa, with timing individualized.'
   d=tp_sizes(p['family'],post_augmentation=p['post'],short_only=p['short'])
   p['sizes']=d
+  p['anatomy']=tp_anatomical_proposal_text(p)
   p['size_display']=('Ø'+tp_fmt(d['pick'][0])+' × '+tp_fmt(d['pick'][1])+' mm · screening candidate') if d['pick'] else 'Dimensions pending / no valid match'
   if p['post']:p['status']='Provisional: reassess after augmentation / revised planning'
   elif not d['pick']:p['status']='Not dimensionally cleared with current data'
@@ -965,7 +1035,7 @@ def tp_export_html(plans_result):
  teeth=escape(', '.join(r('teeth',[]) or []))
  snippets=[]
  for p in plans_result['plans']:
-  snippets.append('<section><h2>Option '+p['key']+' — '+escape(p['title'])+'</h2><p>'+escape(p['subtitle'])+'</p><p><b>Approach:</b> '+escape(p['surgery'])+'</p><p><b>Implant:</b> '+escape(FAMILIES[p['family']])+'</p><p><b>Dimensions:</b> '+escape(p['size_display'])+'</p><p><b>Loading approach:</b> '+escape(p['loading'])+'</p><p><b>Status:</b> '+escape(p['status'])+'</p><p><b>Potential benefit:</b> '+escape(p['pros'])+'</p><p><b>Limitation:</b> '+escape(p['limits'])+'</p></section>')
+  snippets.append('<section><h2>Option '+p['key']+' — '+escape(p['title'])+'</h2><p>'+escape(p['subtitle'])+'</p><p><b>Approach:</b> '+escape(p['surgery'])+'</p><p><b>Implant:</b> '+escape(FAMILIES[p['family']])+'</p><p><b>Dimensions:</b> '+escape(p['size_display'])+'</p><p><b>Anatomical considerations:</b> '+escape(' | '.join(p['anatomy']))+'</p><p><b>Loading approach:</b> '+escape(p['loading'])+'</p><p><b>Status:</b> '+escape(p['status'])+'</p><p><b>Potential benefit:</b> '+escape(p['pros'])+'</p><p><b>Limitation:</b> '+escape(p['limits'])+'</p></section>')
  recs=tp_procedure_recommendations()
  active=[k for k in ('CTG','FGG','GBR') if recs[k]['status']=='suggested']
  procedure_summary=('<section><h2>Additional procedures to evaluate</h2>'+''.join('<p><b>'+k+':</b> '+escape('; '.join(recs[k]['why']))+'</p>' for k in active)+'</section>') if active else ''
@@ -1230,6 +1300,9 @@ elif step==4:
      st.markdown('<div class="tp-implant-img"><img src="'+svg_+'" alt="Illustrative '+escape(level_label_)+' implant diagram"><div class="tp-implant-caption">'+escape(level_label_)+' · '+escape(FAMILIES[plan_['family']])+' · schematic, not an official product photograph</div></div>',unsafe_allow_html=True)
      sz_=plan_['sizes']
      st.markdown('<div class="tp-slab"><h4>🦷 Implant design & dimensions</h4><p><b>Family:</b> '+escape(FAMILIES[plan_['family']])+'</p><p><b>Example:</b> '+escape(plan_['size_display'])+'</p></div>',unsafe_allow_html=True)
+     st.markdown('**Anatomical considerations · site-specific CBCT review**')
+     for line_ in plan_['anatomy']:
+      st.caption('• '+line_)
      if sz_['pick']:
       with st.expander('Catalog sizes that pass preliminary screening'):
        st.write('Diameters: '+', '.join('Ø'+tp_fmt(v)+' mm' for v in sz_['diameters']))
