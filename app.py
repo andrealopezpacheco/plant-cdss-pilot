@@ -148,8 +148,7 @@ st.markdown("""<style>
 
 MODULES = [
     'Patient Data & Priorities', 'Case Type & Site', 'Prosthetic Assessment',
-    'Surgical Assessment', 'Treatment Strategy & Implant Selection', 'Surgical Planning',
-    'Restorative Planning', 'Maintenance Program'
+    'Surgical Assessment', 'Treatment proposal'
 ]
 NEEDS = {
  'PAT-NEED-VISITS':'Fewer appointments',
@@ -467,7 +466,7 @@ def clear(*names,to=None):
   record[n]=[] if to=='list' else to
   st.session_state.pop('ui_'+n,None)
 def goto(step):
- st.session_state.step=max(0,min(8,step))
+ st.session_state.step=max(0,min(4,step))
  st.rerun()
 
 
@@ -1029,12 +1028,13 @@ def tp_row_content(plan,row):
   code=protocol['code'] or 'Pending'
   meaning={'A':'Immediate restoration','B':'Early loading','C':'Conventional loading'}.get(code[-1:],'Timing pending')
   heading='<div class="protocol-highlight">'+escape(code)+'</div><div class="protocol-meaning">'+escape(meaning)+'</div>'
-  visible=('<span class="strategy-alert">Confirm stability during surgery</span>' if code.endswith('A') else '')
+  visible=''  # Stability conditions remain in the protocol information disclosure.
   sections=[('Why',plan['loading_rationale']),('Site & timing',protocol['placement']+' '+protocol['name']),('Conditions',protocol['loading']),('Evidence',protocol['evidence'] or 'Timing not assigned')]
   sources=[CLINICAL_SOURCES['protocol']]
  elif row=='Implant selection':
   asset=STRAUMANN_PRODUCT_IMAGES.get(plan['family'])
-  heading=('<img class="official-implant" src="'+asset['uri']+'" alt="'+escape(FAMILIES[plan['family']])+'">' if asset else '')+'<div class="implant-family-name">'+escape(FAMILIES[plan['family']])+'</div>'
+  image_html=('<img class="official-implant" src="'+asset['uri']+'" alt="'+escape(FAMILIES[plan['family']])+'">' if asset else '')
+  heading='<div class="implant-inline">'+image_html+'<div class="implant-copy"><div class="implant-family-name">'+escape(FAMILIES[plan['family']])+'</div>'
   d=plan['sizes'];pick=d['pick']
   dim=('Ø'+tp_fmt(pick[0])+' × '+tp_fmt(pick[1])+' mm') if pick else 'Dimensions pending'
   if sinus and sinus['length'] is not None:
@@ -1043,6 +1043,7 @@ def tp_row_content(plan,row):
   visible='<div class="implant-dimensions">'+escape(dim)+'</div>'
   if plan['post']:visible+='<span class="strategy-alert">Remeasure after augmentation</span>'
   elif not pick:visible+='<span class="strategy-alert">No dimensional match confirmed</span>'
+  visible+='</div></div>'
   sections=[('Why',PROFILES[plan['family']][1]),('Measurements',f"Ridge width: {tp_fmt(r('ridge_width'))} mm; height: {tp_fmt(r('ridge_height'))} mm; root-safe mesiodistal space: {tp_fmt(tp_root_screen()['md'])} mm."),('Planning margins','Project screening: facial 1.5 mm, palatal/lingual 1.0 mm, mesial/distal 1.5 mm towards natural roots. These are project screening thresholds, not patient-specific clearance.'),('Dimension screening',d['reason']),('Anatomical review',' '.join(plan['anatomy'])),('Image','Official representative family image; not a photograph of the calculated SKU. Verify availability and the current manufacturer IFU.')]
   if sinus:sections.append(('Augmentation target',sinus['target']['reason']+' 8–10 mm is a project planning preference, not a universal literature limit.'))
   if asset:sources=[('Straumann · official family image',asset['source'])]
@@ -1199,7 +1200,10 @@ def tp_export_html(plans_result):
  procedure_summary=('<section><h2>Additional procedures to evaluate</h2>'+''.join('<p><b>'+k+':</b> '+escape('; '.join(recs[k]['why']))+'</p>' for k in active)+'</section>') if active else ''
  ret,acc=tp_restoration_text()
  additional='<section><h2>Clinical review alerts</h2>'+''.join('<p>'+escape(x)+'</p>' for x in tp_restorative_space_screen()['warnings'])+'<p>'+escape(tp_loading_guidance()[0])+'</p><p>'+escape(tp_surgical_access_guidance()[0])+'</p></section>'
- return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Implant treatment comparison</title><style>body{font:15px Arial,sans-serif;max-width:970px;margin:38px auto;color:#273246}h1{color:#35537e}section{border:1px solid #dae4e7;border-radius:12px;padding:20px;margin:14px 0}h2{color:#365e74}p{line-height:1.5}.footer{font-size:12px;color:#607080}</style></head><body><h1>Treatment Strategy &amp; Implant Selection</h1><p><b>Patient:</b> '+name+' &nbsp; <b>Site (FDI):</b> '+teeth+'</p><p><b>Clinical notes:</b> '+escape(', '.join(plans_result['reasons']) or 'Pending clinical review')+'</p>'+procedure_summary+additional+''.join(snippets)+'<section><h2>Restorative discussion</h2><p>'+escape(ret)+'</p><p>'+escape(acc)+'</p></section><p class="footer">Clinical decision-support draft only. Dimensions are from the clinician-edited project matrix and are not verified US SKUs. Use current manufacturer IFU, case-specific CBCT evaluation and clinician judgment. This report may include patient data; handle securely.</p></body></html>')
+ return ('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Implant treatment comparison</title><style>body{font:15px Arial,sans-serif;max-width:970px;margin:38px auto;color:#273246}h1{color:#35537e}.implant-inline{display:flex;align-items:center;gap:14px}.official-implant{width:70px;height:100px;object-fit:contain}.implant-copy{flex:1}section{border:1px solid #dae4e7;border-radius:12px;padding:20px;margin:14px 0}h2{color:#365e74}p{line-height:1.5}.footer{font-size:12px;color:#607080}</style></head><body><h1>Treatment Strategy &amp; Implant Selection</h1><p><b>Patient:</b> '+name+' &nbsp; <b>Site (FDI):</b> '+teeth+'</p><p><b>Clinical notes:</b> '+escape(', '.join(plans_result['reasons']) or 'Pending clinical review')+'</p>'+procedure_summary+additional+''.join(snippets)+'<section><h2>Restorative discussion</h2><p>'+escape(ret)+'</p><p>'+escape(acc)+'</p></section><p class="footer">Clinical decision-support draft only. Dimensions are from the clinician-edited project matrix and are not verified US SKUs. Use current manufacturer IFU, case-specific CBCT evaluation and clinician judgment. This report may include patient data; handle securely.</p></body></html>')
+
+# Restore older sessions directly into the consolidated proposal page.
+if st.session_state.step>4:st.session_state.step=4
 
 with st.sidebar:
  # 1 · Patient name (large) + compact context
@@ -1220,9 +1224,7 @@ with st.sidebar:
  for i in range(4):
   if st.button(MODULES[i],key=f'side_{i}',use_container_width=True,type='primary' if st.session_state.step==i else 'secondary'):goto(i)
  st.markdown('<div class="side-nav section-label">Proposals</div>',unsafe_allow_html=True)
- for i in range(4,8):
-  if st.button(MODULES[i],key=f'side_{i}',use_container_width=True,type='primary' if st.session_state.step==i else 'secondary'):goto(i)
- if st.button('Case Summary',use_container_width=True,type='primary' if st.session_state.step==8 else 'secondary'):goto(8)
+ if st.button('Treatment proposal',key='side_4',use_container_width=True,type='primary' if st.session_state.step==4 else 'secondary'):goto(4)
  if st.button('Reset demo case',use_container_width=True):
   st.session_state.record={'needs':[],'case_type':'CASE-TYPE-SINGLE','teeth':[],'esthetic':'No'}
   for k in list(st.session_state.keys()):
@@ -1231,11 +1233,13 @@ with st.sidebar:
 
 st.markdown('<div class="topline"></div>',unsafe_allow_html=True)
 st.markdown('<div class="hero"><div class="eyebrow">EVIDENCE-BASED · PATIENT-CENTERED · CLINICALLY DRIVEN</div><h1 style="margin:5px 0">Implant Planning Decision Explorer</h1></div>',unsafe_allow_html=True)
+# Remap sessions left on a retired proposal page.
+if st.session_state.step>4:st.session_state.step=4
 step=st.session_state.step
-if step<8:
- st.progress((step+1)/8,text=('05 / 08 · Treatment proposals' if step==4 else f'{step+1:02d} / 08 · {MODULES[step]}'))
+if step<5:
+ st.progress((step+1)/5,text=f'{step+1:02d} / 05 · {MODULES[step]}')
  if step != 4: st.subheader(f'{step+1:02d} · {MODULES[step]}')
-else:st.subheader('Case Summary · Shared Decision-Making')
+
 
 if step==0:
  st.caption('Module PAT: complete this first; values are reused in clinical proposals and the patient snapshot.')
@@ -1471,7 +1475,7 @@ elif step==4:
   rows_=''
   for row_ in ('Placement & loading protocol','Implant selection','Surgical approach','Prosthetic approach','Maintenance protocol'):
    rows_+='<tr><th scope="row">'+escape(row_)+'</th>'+''.join('<td>'+tp_row_content(plan_,row_)+'</td>' for plan_ in comparison_plans_)+'</tr>'
-  st.markdown('<style>.strategy-info{margin-top:8px}.strategy-info summary{display:inline-block;cursor:pointer;color:#347C7A;font-size:1.1rem;line-height:1.2;list-style:none}.strategy-info summary::-webkit-details-marker{display:none}.strategy-info summary:focus-visible{outline:2px solid #489595;outline-offset:3px}.strategy-info-content{background:#F5F9F9;border:1px solid #D4E4E5;border-radius:10px;padding:12px;margin-top:7px;font-weight:400}.strategy-info-content h5{font-size:.8rem;margin:9px 0 4px;color:#245C5B}.strategy-info-content a{color:#246D70}.strategy-alert{display:block;color:#8A5014;background:#FFF4DF;border-radius:6px;padding:4px 7px;margin-top:6px;font-size:.75rem}.protocol-highlight{display:inline-block;border:2px solid #489595;border-radius:14px;background:#E7F3F2;color:#245C5B;font-weight:800;font-size:2.6rem;line-height:1.2;padding:12px 24px;margin-bottom:8px}.protocol-meaning{font-size:.78rem;color:#527080;margin-bottom:10px}.official-implant{display:block;width:100%;height:110px;object-fit:contain;margin:0 auto 12px}.implant-family-name{font-size:1.05rem;font-weight:750;color:#245C5B}.implant-dimensions{font-size:1.1rem;font-weight:700;margin-top:7px}.strategy-scroll{overflow-x:auto;margin:12px 0 20px}.strategy-table{width:100%;min-width:740px;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #D4E4E5;border-radius:14px;overflow:hidden;font-size:.88rem;color:#273B4A}.strategy-table th,.strategy-table td{padding:16px;vertical-align:top;border-bottom:1px solid #DDE8EA;border-right:1px solid #DDE8EA;overflow-wrap:anywhere}.strategy-table thead th{background:#E7F3F2;text-align:left;font-size:1rem}.strategy-table thead th:first-child{width:19%}.strategy-table tbody th{background:#F5F9F9;text-align:left;font-size:.86rem}.strategy-table td{background:white}.strategy-table p{margin:0 0 8px;font-size:.86rem;line-height:1.5}.strategy-table small{display:block;font-weight:400;margin-top:6px;color:#58717B;font-size:.8rem}.strategy-table tr:last-child>*{border-bottom:0}.strategy-table tr>*:last-child{border-right:0}.strategy-option{font-size:.75rem;letter-spacing:.08em;color:#347C7A}</style><div class="strategy-scroll"><table class="strategy-table"><thead><tr>'+header_+'</tr></thead><tbody>'+rows_+'</tbody></table></div>',unsafe_allow_html=True)
+  st.markdown('<style>.strategy-info{margin-top:8px}.strategy-info summary{display:inline-block;cursor:pointer;color:#347C7A;font-size:1.1rem;line-height:1.2;list-style:none}.strategy-info summary::-webkit-details-marker{display:none}.strategy-info summary:focus-visible{outline:2px solid #489595;outline-offset:3px}.strategy-info-content{background:#F5F9F9;border:1px solid #D4E4E5;border-radius:10px;padding:12px;margin-top:7px;font-weight:400}.strategy-info-content h5{font-size:.8rem;margin:9px 0 4px;color:#245C5B}.strategy-info-content a{color:#246D70}.strategy-alert{display:block;color:#8A5014;background:#FFF4DF;border-radius:6px;padding:4px 7px;margin-top:6px;font-size:.75rem}.protocol-highlight{display:inline-block;border:2px solid #489595;border-radius:14px;background:#E7F3F2;color:#245C5B;font-weight:800;font-size:2.6rem;line-height:1.2;padding:12px 24px;margin-bottom:8px}.protocol-meaning{font-size:.78rem;color:#527080;margin-bottom:10px}.implant-inline{display:flex;align-items:center;gap:14px}.implant-copy{flex:1;min-width:0}.official-implant{display:block;width:70px;height:100px;object-fit:contain;flex:0 0 70px;margin:0}.implant-family-name{font-size:1.05rem;font-weight:750;color:#245C5B}.implant-dimensions{font-size:1.1rem;font-weight:700;margin-top:7px}.strategy-scroll{overflow-x:auto;margin:12px 0 20px}.strategy-table{width:100%;min-width:740px;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #D4E4E5;border-radius:14px;overflow:hidden;font-size:.88rem;color:#273B4A}.strategy-table th,.strategy-table td{padding:16px;vertical-align:top;border-bottom:1px solid #DDE8EA;border-right:1px solid #DDE8EA;overflow-wrap:anywhere}.strategy-table thead th{background:#E7F3F2;text-align:left;font-size:1rem}.strategy-table thead th:first-child{width:19%}.strategy-table tbody th{background:#F5F9F9;text-align:left;font-size:.86rem}.strategy-table td{background:white}.strategy-table p{margin:0 0 8px;font-size:.86rem;line-height:1.5}.strategy-table small{display:block;font-weight:400;margin-top:6px;color:#58717B;font-size:.8rem}.strategy-table tr:last-child>*{border-bottom:0}.strategy-table tr>*:last-child{border-right:0}.strategy-option{font-size:.75rem;letter-spacing:.08em;color:#347C7A}</style><div class="strategy-scroll"><table class="strategy-table"><thead><tr>'+header_+'</tr></thead><tbody>'+rows_+'</tbody></table></div>',unsafe_allow_html=True)
   st.caption('ⓘ Click for rationale, measurements, conditions and sources.')
   for plan_ in comparison_plans_:
    critical_=plan_['screening_blocked'] or 'requires assessment' in plan_['status'] or 'review required' in plan_['status'] or 'pending' in plan_['status'].lower()
@@ -1536,106 +1540,10 @@ elif step==4:
    for n_ in SAFETY_NOTES:st.markdown('- '+n_)
   references(4)
 
-elif step==5:
- st.markdown('### Surgical Planning · selected treatment pathway')
- patient_context()
- if r('case_type')=='CASE-TYPE-SINGLE' and r('teeth') and r('site') is not None:
-  result_=tp_build_plans()
-  selected_=r('treatment_path')
-  if selected_ in ('A','B'):
-   p_=result_['plans'][0 if selected_=='A' else 1]
-   st.markdown('#### Working plan · Option '+selected_+' — '+p_['title'])
-   st.info(p_['surgery'])
-   st.caption('Loading concept: '+p_['loading'])
-   if tp_root_screen()['active']:st.warning('Root dilaceration review: surgical axis and root clearance must be confirmed before clinical approval.')
-   if tp_restorative_space_screen()['warnings']:st.warning('Restorative space alerts from Step 03 remain active; finalize component selection before definitive surgical planning.')
-   st.caption('Current status: '+p_['status']+'. This is a working pathway and not a clinical clearance.')
-   if p_['post']:st.warning('Re-assess after augmentation/healing before specifying final implant dimensions.')
-  else:
-   st.warning('No treatment pathway has been selected yet. Compare Options A and B in Step 05 before finalizing the surgical sequence.')
-  with st.container(border=True):
-   st.markdown('#### Record the clinician-approved surgical sequence')
-   rr_=tp_procedure_recommendations()
-   st.caption('Procedure assessment: '+ ' · '.join(k+': '+('evaluate' if rr_[k]['status']=='suggested' else 'data missing' if rr_[k]['status']=='pending' else 'not triggered') for k in ('CTG','FGG','GBR')))
-   choose('surgical_option','Surgical approach',['Undecided','Direct placement / no augmentation','CTG simultaneous to implant placement','GBR simultaneous to implant placement','GBR staged prior to implant','Sinus floor elevation (transcrestal)','Sinus floor elevation (lateral)','Soft-tissue augmentation staged','Combination / individualized protocol'])
-   field('surgical_notes',st.text_area,'Procedure rationale, sequence and anatomical safeguards',default='',placeholder='Site-specific plan, contraindications, need for stages, primary stability, closure…')
-   field('surgical_reassessment',st.text_area,'Required reassessment before surgery',default='',placeholder='CBCT review, sinus assessment, tissue status, anatomical structures, IFU checks…')
-  with st.expander('Surgical alternatives to compare · case-sensitive guidance',expanded=False):
-   if result_['mode']=='sinus':
-    st.markdown('**Short implant versus sinus elevation:** confirm a commercially valid short length, native bone support, crown/implant relationship and sinus conditions. An option with no valid screened implant length is not cleared.')
-   elif result_['mode']=='space':
-    st.markdown('**Interradicular space limitation:** neither simultaneous nor staged GBR alone increases the separation between adjacent natural roots. Evaluate position, orthodontic or restorative alternatives and remeasure before proposing a specific implant.')
-   elif result_['mode'] in ('gbr','staged_pending'):
-    st.markdown('**Simultaneous versus staged GBR:** evaluate restoration-guided 3D positioning, primary stability, defect containment, graft stabilization, closure and the need for horizontal/vertical gain.')
-   elif result_['mode']=='soft':
-    st.markdown('**Simultaneous versus staged tissue augmentation:** distinguish CTG for soft-tissue thickness from FGG or apically positioned flap for keratinized tissue, and assess the independent goal of STH.')
-   else:
-    st.markdown('**No additional procedure is automatically proposed.** Revisit clinical findings if the 3D plan cannot satisfy positioning, tissue and stability requirements.')
-  references(5)
- else:st.info('Complete the single-tooth site and clinical data before finalizing a surgical plan.')
-
-elif step==6:
- st.markdown('### Restorative Planning · selected pathway')
- patient_context()
- selected_=r('treatment_path')
- if selected_ in ('A','B') and r('case_type')=='CASE-TYPE-SINGLE':
-  chosen_=tp_build_plans()['plans'][0 if selected_=='A' else 1]
-  st.info('Working Option '+selected_+': '+chosen_['title']+' · '+FAMILIES[chosen_['family']]+'. Final components must be compatible with the selected platform and positioning.')
- else:st.caption('The implant and its working strategy can be carried over from Step 05 after selection.')
- preview_retention_,preview_access_=tp_restoration_text()
- st.caption('Preliminary idea from Step 05: '+preview_retention_+' '+preview_access_)
- for alert_ in tp_restorative_space_screen()['warnings']:st.warning(alert_)
- if tp_root_screen()['active']:
-  st.info('Root dilaceration: a manufacturer-approved angled abutment/screw channel may be assessed only after a root-safe 3D implant axis is verified. It cannot compensate for root collision.')
- st.caption('Loading: '+tp_loading_guidance()[0])
- left,right=st.columns(2)
- with left:option('Straight screw access','Retrievability can support maintenance when implant trajectory and emergence allow.','Verify restorative space, axis, tissue profile and correct platform components.')
- with right:option('Angled screw access','A manufacturer-approved angled channel can sometimes preserve screw retention despite off-axis access.','Confirm the exact implant platform, component range and restorative space; it cannot compensate for unsafe implant positioning.')
- choose('retention','Final retention concept',['Undecided','Screw-retained','Screw-cement retained (extraoral cementation)','Cement-retained','Compare both'])
- choose('abutment_choice','Abutment or screw-channel configuration',['Undecided','Straight abutment / screw channel','Angled screw channel (if compatible)','Angled abutment (evaluate separately)','Custom abutment'])
- choose('material','Crown material',['Undecided','Monolithic zirconia','Metal-ceramic','Other'])
- choose('provisional','Provisional approach',['Undecided','No provisional','Interim prosthesis','Implant-supported provisional if feasible'])
- if r('esthetic')=='No' and r('provisional')=='Implant-supported provisional if feasible':
-  st.warning('Without a specific esthetic indication, an immediate implant-supported provisional is a secondary option. Document the benefit, occlusal design and validated primary-stability criteria.')
- field('restorative_rationale',st.text_area,'Restorative rationale and limitations',default='',placeholder='Screw access, emergence, retrievability, cement risks, restorative space, cleansability…')
- if r('pro_para') in ('PRO-PARA-SELF','PRO-PARA-SUSPECTED','PRO-PARA-BOTH'):notice('Reassess occlusal loading and protective strategies.')
- references(6)
-
-elif step==7:
- st.markdown('### Maintenance Program · proposed considerations')
- patient_context()
- st.markdown('**Maintenance recommendations must be individualized after baseline assessment.**')
- st.info('Preoperative recall suggestion: '+tp_maintenance_guidance())
- st.write('✅ Record baseline soft-tissue and radiographic parameters after prosthesis delivery.')
- st.write('✅ Assess plaque control, probing parameters, restorability, access for hygiene, and patient ability to attend recall visits.')
- st.write('⚠️ Periodontal history, smoking, prosthetic cleansability and peri-implant findings may modify follow-up intervals.')
- st.write('‼️ Do not assign a fixed interval from age or preferences alone; clinical risk evaluation is required.')
- choose('maintenance_plan','Recall plan for clinician review',['Not assigned','Individualized after risk assessment','Consider shorter interval pending assessment','Standard follow-up pending assessment'])
- references(7)
-
-else:
- st.markdown('### Case summary and selected pathways')
- a,b,c=st.columns(3)
- a.metric('Patient',r('name') or 'Not entered')
- b.metric('Bone height',f"{r('ridge_height')} mm" if r('ridge_height') is not None else 'Unknown')
- c.metric('Bone width',f"{r('ridge_width')} mm" if r('ridge_width') is not None else 'Unknown')
- st.write('**Age group:**',AGES.get(r('age'),'Not entered'))
- st.write('**Needs:**',', '.join(NEEDS.get(x,x) for x in r('needs',[])) or 'Not entered')
- st.write('**Case:**',CASE_TYPES.get(r('case_type')))
- st.write('**Teeth (FDI):**',(', '.join(r('teeth',[])) or 'Not selected') if r('case_type')!='CASE-TYPE-EDENT' else r('arch','Unknown'))
- st.write('**Esthetic concern:**',r('esthetic','Not entered'))
- st.write('**Current site:**',SITE.get(r('site'),'Not entered'))
- st.write('**Working treatment strategy:**',r('treatment_path') or 'No plan selected')
- st.write('**Implant / surgical / restorative:**',FAMILIES.get(r('implant_family'),'Undecided'),'·',r('surgical_option','Undecided'),'·',r('retention','Undecided'))
- st.write('**Maintenance:**',r('maintenance_plan','Not assigned'))
- st.caption('The summary represents the current working plan, not a treatment prescription or an approved clinical recommendation.')
- # Structured codes allow downstream research and software iterations.
- st.download_button('Export coded case as JSON',data=json.dumps(record,indent=2,ensure_ascii=False),file_name='implant_cdss_demo_case.json',mime='application/json')
- st.warning('Demo only. Export may include patient name; use pseudonyms and avoid patient-identifiable data on publicly deployed applications.')
 
 st.divider()
 left,mid,right=st.columns([1,3,1])
 with left:
  if st.button('← Previous',disabled=step==0,use_container_width=True):goto(step-1)
 with right:
- if st.button('Next →' if step<8 else 'Restart navigation ↺',type='primary',use_container_width=True):goto(step+1 if step<8 else 0)
+ if st.button('Next →' if step<4 else 'Review inputs ↺',type='primary',use_container_width=True):goto(step+1 if step<4 else 0)
