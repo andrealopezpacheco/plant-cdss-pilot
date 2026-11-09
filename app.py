@@ -352,7 +352,7 @@ def implant_scenarios():
  ('BL',site=='CASE-SITE-HEALED' and bq=='SUR-BQ-D4','Healed ridge with low-density trabecular bone (D4)','BLX or BLT','BLC','Conical design and an adapted preparation provide greater stability capacity.','Do not impose generic underpreparation: follow the density protocol and control torque.'),
  ('BL',bq in ('SUR-BQ-D1','SUR-BQ-D2'),'Dense bone / thick cortex (D1 to D2)','BLC or BLT with an adequate preparation','BLX with an adapted sequence','The choice must control cortical compression, not maximize torque.','Avoid overcompression; use a specific drilling/thread protocol and control heat.'),
  ('BL',apical,'Restricted interradicular anatomy (dilacerated roots)','BLC or BLT','BLX if it allows orientation','The thin C apex and the BLT apical taper favor selective anatomical evaluation.','Confirm distances to roots, cortex and anatomical structures.'),
- ('BL',incisor and 'PRO-SPACELIM-RED_MD' in (r('pro_space_lim',[]) or []),'Narrow mesiodistal space (selected incisors)','BLT Ø2.9 SC','BLC Ø3.3 if the anatomy allows','Ø2.9 has specific indications for narrow incisors; it is not a universal space solution.','Validate the mesiodistal distance, restorative diameter and forces; check the IFU exclusions.'),
+ ('BL',incisor and (r('pro_md') is not None and r('pro_md')<6.0),'Narrow mesiodistal space (selected incisors)','BLT Ø2.9 SC','BLC Ø3.3 if the anatomy allows','Ø2.9 has specific indications for narrow incisors; it is not a universal space solution.','Validate the mesiodistal distance, restorative diameter and forces; check the IFU exclusions.'),
  ('BL',defect and gbr=='IMP-GBR-SIMULT','Buccal defect / dehiscence with simultaneous GBR','BLC / BLT','BLX if additional stability is required','Bone Level is prioritized for regeneration management and 3D position.','Assess the severity of the defect and the need for a staged approach.'),
  ('TL',posterior and site=='CASE-SITE-HEALED' and imm_ld=='IMP-IMMLD-NO' and level=='TL','Healed posterior site; adequate STH, gingiva and bone; no GBR','TLC','TLX','Transmucosal Tissue Level when the shoulder position is prosthetically favorable.','Ensure hygiene access, emergence, restorability and phenotype.'),
  ('TL',posterior and imm_ld=='IMP-IMMLD-YES' and level=='TL','Posterior site with adequate tissues; immediate loading under evaluation','TLX','BLX if Tissue Level is not suitable','X favors stability; TLX keeps the transmucosal prosthetic connection.','Do not prioritize TLX if the tissue anatomy requires CTG/GBR.')]
@@ -626,36 +626,19 @@ def tp_surgical_access_guidance():
 
 
 def tp_restorative_space_screen():
- """Working component-sensitive warnings. Do not treat a threshold as manufacturer IFU."""
+ """Simplified preoperative space alert based only on the reported interocclusal measure.
+ The datum and abutment type are NOT assumed; screening values are not component clearances.
+ """
  io=r('pro_io')
- comp=r('pro_component')
- reference=r('pro_io_datum')
- chs=r('pro_chs')
  warnings=[]
  missing=[]
- if io is None:missing.append('Available interocclusal space')
- if comp is None:missing.append('Intended abutment family (SRA or Ti-base)')
- if reference is None:missing.append('Vertical measurement reference')
- thresholds={'PRO-COMP-SRA':SRA_SPACE_REVIEW_MM,'PRO-COMP-TIBASE':TIBASE_SPACE_REVIEW_MM}
- min_space=thresholds.get(comp)
- if io is not None:
-  if min_space is not None and io<min_space:
-   label='SRA' if comp=='PRO-COMP-SRA' else 'Ti-base'
-   warnings.append(f'INSUFFICIENT WORKING SPACE: {tp_fmt(io)} mm is below the {tp_fmt(min_space)} mm {label} screening threshold. Reconsider the component/position/restorative design and verify the exact Straumann IFU.')
-  elif comp is None and io<TIBASE_SPACE_REVIEW_MM:
-   warnings.append('LIMITED VERTICAL SPACE: below both preliminary SRA (7 mm) and Ti-base (6 mm) thresholds; select a component and confirm its actual requirements.')
-  elif comp is None and io<SRA_SPACE_REVIEW_MM:
-   warnings.append('BORDERLINE VERTICAL SPACE: potentially inadequate for an SRA; evaluate Ti-base and the precise component dimensions.')
-  elif comp=='PRO-COMP-SRA' and SRA_SPACE_REVIEW_MM<=io<7.5:
-   warnings.append('BORDERLINE SRA SPACE: the 7 mm project threshold is met, but a literature review reports approximately 7.5 mm for abutment-level fixed screw-retained restorations. Validate the selected component.')
- if io is not None and reference in (None,'PRO-IODATUM-OTHER'):
-  warnings.append('MEASUREMENT DATUM UNRESOLVED: confirm whether the vertical measure is from the implant platform, abutment interface or mucosal level before applying a product-specific threshold.')
- if chs is not None and chs>CROWN_HEIGHT_REVIEW_MM:
-  warnings.append(f'EXCESSIVE CROWN-HEIGHT SPACE: {tp_fmt(chs)} mm exceeds the 15 mm biomechanical review threshold. Assess crown/implant relationship, occlusal forces, prosthesis design, number/distribution of implants and risk of technical/mechanical complications.')
- elif chs is None and io is not None and io>CROWN_HEIGHT_REVIEW_MM:
-  warnings.append('AVAILABLE VERTICAL SPACE >15 mm: measure crown-height space from its correct crestal reference to assess mechanical risk; interocclusal and crown-height measurements are not interchangeable.')
- if chs is None:missing.append('Crown-height space for excessive-height review (optional)')
- return dict(warnings=warnings,missing=missing,minimum=min_space,component=comp,reference=reference,io=io,chs=chs)
+ if io is None:
+  missing.append('Interocclusal restorative space')
+ elif io<TIBASE_SPACE_REVIEW_MM:
+  warnings.append(f'LIMITED RESTORATIVE SPACE: {tp_fmt(io)} mm. Review prosthetic feasibility and verify the selected component requirements and measurement reference.')
+ elif io<SRA_SPACE_REVIEW_MM:
+  warnings.append(f'RESTORATIVE SPACE REVIEW: {tp_fmt(io)} mm. Confirm the space needed for the proposed abutment and restoration.')
+ return dict(warnings=warnings,missing=missing,minimum=None,component=None,reference=None,io=io,chs=None)
 
 
 def tp_loading_guidance():
@@ -749,7 +732,7 @@ def tp_has_soft_defect():
 
 def tp_family_pair(level):
  info=tp_site_info()
- narrow=info['kind']=='narrow incisor' and ('PRO-SPACELIM-RED_MD' in (r('pro_space_lim',[]) or []))
+ narrow=info['kind']=='narrow incisor' and ((r('pro_md') is not None and r('pro_md')<6.0))
  if narrow:return 'IMP-FAM-BLT','IMP-FAM-BLC'
  imm=r('immediate_loading')=='IMP-IMMLD-YES' and r('esthetic')=='Yes'
  if level=='TL':return ('IMP-FAM-TLX','IMP-FAM-TLC') if imm else ('IMP-FAM-TLC','IMP-FAM-TLX')
@@ -1087,7 +1070,6 @@ elif step==1:
  choose('esthetic','Does this case involve an esthetic concern?',['No','Yes'])
  pick('mouth_opening','Maximal mouth opening',opts('MOUTH',[('OPTIMAL','Optimal','Opening sufficient for surgical and restorative instrument access.'),('LIMITED','Limited','Opening that restricts access for surgical or restorative instrumentation (e.g., posterior sites, guided surgery).')],prefix='CASE'),'Assessment of whether the maximal mouth opening allows adequate access for the planned surgery and restoration.')
  field('site',st.selectbox,'Current site condition',default=None,options=list(SITE),format_func=lambda c:SITE[c],index=None,placeholder='Select…')
- if r('site')=='CASE-SITE-EXTRACT':st.info('Tooth is still present. Evaluate extraction considerations and potential timing options later; Type 1 is not assumed.')
 
 elif step==2:
  st.caption('Three domains of the prosthetic assessment. All are relevant to planning and none depends on another: complete them in any order. Hover over the ⓘ next to each item for its definition and options.')
@@ -1098,15 +1080,8 @@ elif step==2:
    st.markdown('<div class="col-title">Restorative Space</div><div class="col-desc">Three-dimensional space available for the planned implant-supported restoration.</div>',unsafe_allow_html=True)
    numeric('pro_md','Mesiodistal space (mm)',help='Distance available mesiodistally for the future restoration, bounded by the proximal surfaces of the adjacent teeth or restorations.')
    numeric('pro_io','Interocclusal restorative space (mm)',help='Record the available vertical restorative space measured against the opposing dentition. The reference level is essential for applying component-specific requirements.')
-   pick('pro_io_datum','Vertical measurement reference',opts('IODATUM',[('PLATFORM','Implant platform','Measured from proposed implant platform.'),('ABUTMENT','Abutment seating interface','Measured from the component seating interface.'),('MUCOSA','Mucosal margin','Measured from mucosal margin; manufacturer component requirements may use another datum.'),('OTHER','Other / unclear','Reference must be clarified before definitive prosthetic space eligibility.')]),'Identify the actual starting landmark. Do not compare measurements taken from different reference levels as if equivalent.')
-   pick('pro_component','Abutment concept for preliminary space screening',opts('COMP',[('SRA','SRA · Screw-retained abutment','Project alert under 7 mm; literature reports ~7.5 mm for many abutment-level fixed screw-retained reconstructions.'),('TIBASE','Ti-base / Variobase','Project alert under 6 mm; actual requirements depend on the specific component and crown.')]),'These are project-defined alerts, NOT universal minimum dimensions for every Straumann SKU. Verify component geometry and IFU.')
-   numeric('pro_chs','Crown-height space from ridge crest (mm) · if known',max_value=40,help='Separate crestal crown-height space used for biomechanical review; do not assume it equals the interocclusal measurement. Values >15 mm trigger a crown-height review (Misch et al.).')
    space_info_=tp_restorative_space_screen()
    for msg_ in space_info_['warnings']:st.warning(msg_)
-   if r('pro_io') is not None and not space_info_['warnings']:st.caption('No component-space alert triggered. Compatibility still requires the actual Straumann part and restoration design.')
-   st.caption('Literature: 2019 JADA systematic review of restorative space reports ~7.5 mm for abutment-level screw-retained designs; Misch et al. consensus describes >15 mm crestal crown-height space as excessive. These are not interchangeable measurements.')
-   LIM=opts('SPACELIM',[('NONE','None','No space limitation identified.'),('RED_V','Reduced vertical space','Insufficient vertical space.'),('RED_MD','Reduced mesiodistal space','Insufficient mesiodistal space.'),('EXC_V','Excessive vertical space','Increased vertical space, which may require a different restorative design.'),('EXC_MD','Excessive mesiodistal space','Increased mesiodistal space, which may require a different restorative design.')])
-   pickmulti('pro_space_lim','Restorative space limitation',LIM,'Clinical identification of dimensional limitations for executing the proposed restoration.',none_code='PRO-SPACELIM-NONE')
  # ---------------- 2 · Restoration–Tissue Relationship ----------------
  with c2:
   with st.container(border=True):
@@ -1141,15 +1116,12 @@ elif step==2:
     if 'PRO-PLANEALT-OTHER' in (r('pro_plane_alt',[]) or []):field('pro_plane_alt_other',st.text_input,'Specify other alteration',default='')
     else:clear('pro_plane_alt_other',to='')
    else:clear('pro_plane_alt',to='list');clear('pro_plane_alt_other',to='')
-   OPP=opts('OPP',[('NATURAL','Natural tooth','Natural dentition.'),('IMPLANT','Implant-supported restoration','Implant-supported restoration.'),('TOOTHFIXED','Tooth-supported fixed prosthesis','Tooth-supported fixed prosthesis.'),('REMOVABLE','Removable prosthesis','Removable prosthesis.'),('MIXED','Mixed','Combination of different antagonist types.'),('NONE','No antagonist','No opposing dentition.')])
-   pick('pro_opp','Opposing dentition',OPP,'Type of dental or prosthetic structure that the future restoration will oppose.')
    st.markdown('<div class="section-label sub-label">Parafunctional activity</div>',unsafe_allow_html=True)
    PARA=opts('PARA',[('NONE','None identified','No parafunctional activity identified with the available information.'),('SELF','Self-reported','Parafunctional activity reported by the patient.'),('SUSPECTED','Clinically suspected','Clinical suspicion based on the examination.'),('BOTH','Both','Both self-reported and clinically suspected.')])
    pick('pro_para','Parafunctional activity',PARA,'Reported or clinically suspected parafunctional mandibular muscle activity.')
  # ---------------- preliminary prompts (not validated rules) ----------------
  if r('esthetic')=='Yes':st.info('Esthetic concern recorded. Evaluate provisionalization and soft-tissue architecture in restorative proposals.')
  if r('pro_ridge')=='PRO-RIDGE-DEFICIENT' or r('pro_margin')=='PRO-MARGIN-APICAL':st.info('Assess soft-tissue and/or volume augmentation options; timing and indication require evaluation.')
- if any(c in (r('pro_space_lim',[]) or []) for c in ('PRO-SPACELIM-RED_V','PRO-SPACELIM-RED_MD')):st.info('Reduced restorative space recorded: evaluate space-gaining or alternative restorative strategies when indicated.')
  if tp_restorative_space_screen()['warnings']:
   st.warning('Restorative space review required before considering the treatment plan technically feasible. Confirm selected component dimensions, appropriate crestal/reference measurements, occlusion and restorative materials.')
 
