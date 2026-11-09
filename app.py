@@ -117,14 +117,14 @@ st.markdown("""<style>
  background-color:transparent!important;background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2080%22%3E%3Cpath%20d%3D%22M25%207%20C14%202%205%209%205%2026%20C5%2043%209%2066%2018%2073%20C23%2077%2027%2071%2032%2072%20C37%2071%2041%2077%2046%2073%20C55%2066%2059%2043%2059%2026%20C59%209%2050%202%2039%207%20C33%2010%2031%2010%2025%207%20Z%22%20fill%3D%22%23FFFFFF%22%20stroke%3D%22%2390BEC0%22%20stroke-width%3D%221.7%22%2F%3E%3C%2Fsvg%3E")!important;
  background-repeat:no-repeat!important;background-position:center!important;background-size:100% 100%!important;
  color:#24364A!important;}
-.st-key-tooth_picker [data-testid="stButton"] button[kind="primary"] {background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2080%22%3E%3Cpath%20d%3D%22M25%207%20C14%202%205%209%205%2026%20C5%2043%209%2066%2018%2073%20C23%2077%2027%2071%2032%2072%20C37%2071%2041%2077%2046%2073%20C55%2066%2059%2043%2059%2026%20C59%209%2050%202%2039%207%20C33%2010%2031%2010%2025%207%20Z%22%20fill%3D%22%23D5ECEA%22%20stroke%3D%22%23489595%22%20stroke-width%3D%221.7%22%2F%3E%3C%2Fsvg%3E")!important;}
+.st-key-tooth_picker [data-testid="stButton"] button[kind="primary"] {background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2080%22%3E%3Cpath%20d%3D%22M25%207%20C14%202%205%209%205%2026%20C5%2043%209%2066%2018%2073%20C23%2077%2027%2071%2032%2072%20C37%2071%2041%2077%2046%2073%20C55%2066%2059%2043%2059%2026%20C59%209%2050%202%2039%207%20C33%2010%2031%2010%2025%207%20Z%22%20fill%3D%22%23DFFA9B%22%20stroke%3D%22%2391BF35%22%20stroke-width%3D%221.7%22%2F%3E%3C%2Fsvg%3E")!important;}
 .st-key-tooth_picker [data-testid="stButton"] button:hover {filter:brightness(.96);}
 .st-key-tooth_picker [data-testid="stButton"] button:focus-visible {outline:2px solid #489595!important;outline-offset:2px;}
 .st-key-tooth_picker [data-testid="stButton"] button p {font-size:clamp(10px,1.1vw,15px)!important;line-height:1.35!important;}
 .st-key-tooth_picker [data-testid="stVerticalBlock"] {gap:.25rem!important;}
 .st-key-tooth_picker .arch-caption {display:flex;justify-content:space-between;color:#527080;font-size:.75rem;margin:12px 0 3px;}
 .st-key-tooth_picker .tooth-summary {border-top:1px solid #DDE8EA;margin-top:16px;padding-top:12px;font-size:.85rem;}
-.st-key-tooth_picker .tooth-chip {display:inline-block;background:#E7F3F2;border:1px solid #78B1AE;border-radius:20px;padding:3px 10px;margin:2px;color:#245C5B;}
+.st-key-tooth_picker .tooth-chip {display:inline-block;background:#F0F8D9;border:1px solid #B6D46B;border-radius:20px;padding:3px 10px;margin:2px;color:#273B35;}
 </style>""",unsafe_allow_html=True)
 
 st.markdown("""<style>
@@ -1184,7 +1184,7 @@ elif step==1:
   st.caption('Full-arch treatment planning is outside the current single-tooth prototype.')
  else:
   st.markdown('**Select treatment site**')
-  st.caption('Universal / FDI · Select or deselect teeth. Selected teeth appear in soft teal.')
+  st.caption('Universal / FDI · Select or deselect teeth. Selected teeth appear in lime.')
   if case_type=='CASE-TYPE-SINGLE' and len(r('teeth',[]))>1:
    record['teeth']=r('teeth',[])[:1]
   def toggle_tooth(fdi):
