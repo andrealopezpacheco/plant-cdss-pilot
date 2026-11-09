@@ -117,14 +117,14 @@ st.markdown("""<style>
  background-color:transparent!important;background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2080%22%3E%3Cpath%20d%3D%22M25%207%20C14%202%205%209%205%2026%20C5%2043%209%2066%2018%2073%20C23%2077%2027%2071%2032%2072%20C37%2071%2041%2077%2046%2073%20C55%2066%2059%2043%2059%2026%20C59%209%2050%202%2039%207%20C33%2010%2031%2010%2025%207%20Z%22%20fill%3D%22%23FFFFFF%22%20stroke%3D%22%2390BEC0%22%20stroke-width%3D%221.7%22%2F%3E%3C%2Fsvg%3E")!important;
  background-repeat:no-repeat!important;background-position:center!important;background-size:100% 100%!important;
  color:#24364A!important;}
-.st-key-tooth_picker [data-testid="stButton"] button[kind="primary"] {background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2080%22%3E%3Cpath%20d%3D%22M25%207%20C14%202%205%209%205%2026%20C5%2043%209%2066%2018%2073%20C23%2077%2027%2071%2032%2072%20C37%2071%2041%2077%2046%2073%20C55%2066%2059%2043%2059%2026%20C59%209%2050%202%2039%207%20C33%2010%2031%2010%2025%207%20Z%22%20fill%3D%22%23DFFA9B%22%20stroke%3D%22%2391BF35%22%20stroke-width%3D%221.7%22%2F%3E%3C%2Fsvg%3E")!important;}
+.st-key-tooth_picker [data-testid="stButton"] button[kind="primary"] {background-image:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2080%22%3E%3Cpath%20d%3D%22M25%207%20C14%202%205%209%205%2026%20C5%2043%209%2066%2018%2073%20C23%2077%2027%2071%2032%2072%20C37%2071%2041%2077%2046%2073%20C55%2066%2059%2043%2059%2026%20C59%209%2050%202%2039%207%20C33%2010%2031%2010%2025%207%20Z%22%20fill%3D%22%23D5ECEA%22%20stroke%3D%22%23489595%22%20stroke-width%3D%221.7%22%2F%3E%3C%2Fsvg%3E")!important;}
 .st-key-tooth_picker [data-testid="stButton"] button:hover {filter:brightness(.96);}
 .st-key-tooth_picker [data-testid="stButton"] button:focus-visible {outline:2px solid #489595!important;outline-offset:2px;}
 .st-key-tooth_picker [data-testid="stButton"] button p {font-size:clamp(10px,1.1vw,15px)!important;line-height:1.35!important;}
 .st-key-tooth_picker [data-testid="stVerticalBlock"] {gap:.25rem!important;}
 .st-key-tooth_picker .arch-caption {display:flex;justify-content:space-between;color:#527080;font-size:.75rem;margin:12px 0 3px;}
 .st-key-tooth_picker .tooth-summary {border-top:1px solid #DDE8EA;margin-top:16px;padding-top:12px;font-size:.85rem;}
-.st-key-tooth_picker .tooth-chip {display:inline-block;background:#F0F8D9;border:1px solid #B6D46B;border-radius:20px;padding:3px 10px;margin:2px;color:#273B35;}
+.st-key-tooth_picker .tooth-chip {display:inline-block;background:#E7F3F2;border:1px solid #78B1AE;border-radius:20px;padding:3px 10px;margin:2px;color:#245C5B;}
 </style>""",unsafe_allow_html=True)
 
 st.markdown("""<style>
@@ -1155,7 +1155,7 @@ if step==0:
   if r('top_priority')==NO_PRIORITY:st.caption('No single priority is highlighted; the selected concerns are shown without ranking.')
   else:st.caption('This priority influences how viable plans are compared, not clinical eligibility.')
  st.markdown('**Medical history & risk factors**')
- st.caption('Patient-reported · select all that apply. Leave blank only if the history has not yet been assessed.')
+ st.caption('Patient-reported · select all that apply.')
  field('medical_risk_factors',st.multiselect,'Relevant medical history / risk factors',default=[],options=list(MEDICAL_RISK_OPTIONS),format_func=lambda c:MEDICAL_RISK_OPTIONS[c],placeholder='Select conditions or No known relevant history')
  medical_flags=set(r('medical_risk_factors',[]) or [])
  if 'NONE' in medical_flags and len(medical_flags)>1:
@@ -1184,7 +1184,7 @@ elif step==1:
   st.caption('Full-arch treatment planning is outside the current single-tooth prototype.')
  else:
   st.markdown('**Select treatment site**')
-  st.caption('Universal / FDI · Select or deselect teeth. Selected teeth appear in lime.')
+  st.caption('Universal / FDI · Select or deselect teeth. Selected teeth appear in soft teal.')
   if case_type=='CASE-TYPE-SINGLE' and len(r('teeth',[]))>1:
    record['teeth']=r('teeth',[])[:1]
   def toggle_tooth(fdi):
@@ -1247,7 +1247,11 @@ elif step==2:
    pick('pro_margin','Mucosal margin position',MARGIN,'Position of the current mucosal margin relative to the ideal cervical location of the future restoration.')
    if r('pro_margin')=='PRO-MARGIN-APICAL':numeric('pro_margin_mm','Mucosal margin discrepancy (mm)',max_value=20,help='Magnitude of the vertical difference between the current mucosal margin and the planned cervical margin.')
    else:clear('pro_margin_mm')
-   PAP=lambda v:opts(v,[('PRESERVED','Preserved','Interproximal tissue adequately fills the intended space.'),('REDUCED','Reduced','Partial fill of the interproximal space.'),('ABSENT','Absent','No clinically identifiable papilla.'),('NA','Not applicable','Does not apply to this type of restoration.')])
+   PAP=lambda v:opts(v,[('PRESERVED','Preserved','Interproximal tissue adequately fills the intended space.'),('REDUCED','Reduced','Partial fill of the interproximal space.'),('ABSENT','Absent','No clinically identifiable papilla.')])
+   # Clear retired papilla answers from previously saved sessions.
+   for papilla_key in ('pro_pap_m','pro_pap_d'):
+    if str(r(papilla_key) or '').endswith('-NA'):
+     clear(papilla_key)
    pick('pro_pap_m','Mesial papilla',PAP('PAPM'),'Degree to which mesial soft tissue fills the interproximal space relative to the planned cervical architecture.')
    pick('pro_pap_d','Distal papilla',PAP('PAPD'),'Degree to which distal soft tissue fills the interproximal space relative to the planned restorative architecture.')
  # ---------------- 3 · Occlusal Assessment ----------------
@@ -1357,47 +1361,46 @@ elif step==4:
    st.caption('Posterior maxillary site with '+tp_fmt(r('ridge_height'))+' mm residual height. This triggers a comparison, not an automatic indication for sinus elevation or for a short implant.')
   elif result_['mode']=='space':
    st.caption('Implant placement is not cleared while the root/mesiodistal trajectory remains unsafe or unverified.')
-  cols_=st.columns(2,gap='medium')
-  for col_,plan_ in zip(cols_,result_['plans']):
-   with col_:
-    with st.container(border=True):
-     chip_class_='tp-chip' if plan_['key']=='A' else 'tp-chip alt'
-     st.markdown('<div class="'+chip_class_+'">OPTION '+plan_['key']+'</div><div class="tp-head"><div class="tp-title">'+escape(plan_['title'])+'</div><div class="tp-sub">'+escape(plan_['subtitle'])+'</div></div>',unsafe_allow_html=True)
-     protocol_=plan_['protocol']
-     if protocol_['code']:
-      st.markdown('### Protocol '+protocol_['code'])
-      st.caption(protocol_['placement']+' · '+protocol_['name']+' · '+('SCV' if protocol_['evidence']=='SCV' else 'Clinically documented: limited evidence'))
-     else:st.warning(protocol_['name']+': '+protocol_['placement'])
-     st.markdown('<div class="tp-slab"><h4>🩺 Surgical approach</h4><p>'+escape(plan_['surgery'])+'</p></div>',unsafe_allow_html=True)
-     st.markdown('**Site-derived augmentation assessment**')
-     for aug_ in plan_['augmentations']:st.write('• '+aug_)
-     alignment_=tp_patient_alignment(plan_)
-     if alignment_:
-      st.markdown('<div class="tp-state"><b>Patient-centered value:</b> '+escape(alignment_)+'</div>',unsafe_allow_html=True)
-     svg_=tp_small_visual(plan_['family'])
-     level_label_='Tissue Level' if plan_['family'] in ('IMP-FAM-TLC','IMP-FAM-TLX') else 'Bone Level'
-     st.markdown('<div class="tp-implant-img"><img src="'+svg_+'" alt="Illustrative '+escape(level_label_)+' implant diagram"><div class="tp-implant-caption">'+escape(level_label_)+' · '+escape(FAMILIES[plan_['family']])+' · schematic, not an official product photograph</div></div>',unsafe_allow_html=True)
-     sz_=plan_['sizes']
-     st.markdown('<div class="tp-slab"><h4>🦷 Implant design & dimensions</h4><p><b>Family:</b> '+escape(FAMILIES[plan_['family']])+'</p><p><b>Example:</b> '+escape(plan_['size_display'])+'</p></div>',unsafe_allow_html=True)
-     st.markdown('**Anatomical considerations · site-specific CBCT review**')
-     for line_ in plan_['anatomy']:
-      st.caption('• '+line_)
-     if sz_['pick']:
-      with st.expander('Catalog sizes that pass preliminary screening'):
-       st.write('Diameters: '+', '.join('Ø'+tp_fmt(v)+' mm' for v in sz_['diameters']))
-       st.write('Lengths for candidate diameter: '+', '.join(str(v)+' mm' for v in sz_['lengths']))
-       st.caption(sz_['reason'])
-     else:
-      st.caption('No dimensions cleared yet: '+sz_['reason'])
-     st.markdown('<div class="tp-slab"><h4>⚙️ Preliminary restorative strategy</h4><p>'+escape(tp_restoration_text()[0])+'</p><p>'+escape(tp_restoration_text()[1])+'</p></div>',unsafe_allow_html=True)
-     st.markdown('<div class="tp-slab"><h4>⚙️ Prosthetic approach</h4><p>'+escape(protocol_['loading'])+'</p><p>'+escape(protocol_['provisional'])+'</p></div>',unsafe_allow_html=True)
-     st.markdown('<div class="tp-slab"><h4>🗓️ Maintenance protocol</h4><p>'+escape(plan_['maintenance'])+'</p></div>',unsafe_allow_html=True)
-     st.markdown('<div class="tp-state"><b>Preoperative feasibility:</b> '+escape(plan_['status'])+'</div>',unsafe_allow_html=True)
-     with st.expander('Benefits, limitations & rationale'):
-      st.markdown('**Benefit:** '+plan_['pros'])
-      st.markdown('**Limitations:** '+plan_['limits'])
-      st.markdown('**Macrodesign rationale:** '+PROFILES[plan_['family']][1])
-  st.caption('Bone/Tissue Level diagrams are original conceptual illustrations, not manufacturer photos. Replace them with approved catalog product images when available. Neither plan is approved without CBCT, prosthetic analysis and current manufacturer IFU.')
+  # Comparative presentation only: candidate generation and clinical rules unchanged.
+  comparison_plans_=result_['plans']
+  def comparison_p(text):
+   return '<p>'+escape(str(text))+'</p>'
+  def comparison_cell(plan,row):
+   protocol=plan['protocol']
+   if row=='Placement & loading protocol':
+    label=('Protocol '+protocol['code']) if protocol['code'] else 'Protocol pending'
+    return '<strong>'+escape(label)+'</strong>'+comparison_p(protocol['name'])+comparison_p(protocol['placement'])
+   if row=='Implant selection':
+    return '<strong>'+escape(plan['size_display'])+'</strong>'+comparison_p(FAMILIES[plan['family']])+comparison_p(plan['sizes']['reason'])
+   if row=='Surgical approach':
+    return comparison_p(plan['surgery'])+''.join(comparison_p('• '+x) for x in plan['augmentations'])
+   if row=='Prosthetic approach':
+    return comparison_p(protocol['loading'])+comparison_p(protocol['provisional'])+comparison_p(tp_restoration_text()[0])+comparison_p(tp_restoration_text()[1])
+   return comparison_p(plan['maintenance'])
+  header_='<th scope="col">Treatment strategy</th>'
+  for plan_ in comparison_plans_:
+   header_+='<th scope="col"><span class="strategy-option">OPTION '+escape(plan_['key'])+'</span><br>'+escape(plan_['title'])+'<small>'+escape(plan_['subtitle'])+'</small></th>'
+  # A third column is shown only when a third real candidate exists.
+  rows_=''
+  for row_ in ('Placement & loading protocol','Implant selection','Surgical approach','Prosthetic approach','Maintenance protocol'):
+   rows_+='<tr><th scope="row">'+escape(row_)+'</th>'+''.join('<td>'+comparison_cell(plan_,row_)+'</td>' for plan_ in comparison_plans_)+'</tr>'
+  st.markdown('<style>.strategy-scroll{overflow-x:auto;margin:12px 0 20px}.strategy-table{width:100%;min-width:740px;border-collapse:separate;border-spacing:0;table-layout:fixed;border:1px solid #D4E4E5;border-radius:14px;overflow:hidden;font-size:.88rem;color:#273B4A}.strategy-table th,.strategy-table td{padding:16px;vertical-align:top;border-bottom:1px solid #DDE8EA;border-right:1px solid #DDE8EA;overflow-wrap:anywhere}.strategy-table thead th{background:#E7F3F2;text-align:left;font-size:1rem}.strategy-table thead th:first-child{width:19%}.strategy-table tbody th{background:#F5F9F9;text-align:left;font-size:.86rem}.strategy-table td{background:white}.strategy-table p{margin:0 0 8px;font-size:.86rem;line-height:1.5}.strategy-table small{display:block;font-weight:400;margin-top:6px;color:#58717B;font-size:.8rem}.strategy-table tr:last-child>*{border-bottom:0}.strategy-table tr>*:last-child{border-right:0}.strategy-option{font-size:.75rem;letter-spacing:.08em;color:#347C7A}</style><div class="strategy-scroll"><table class="strategy-table"><thead><tr>'+header_+'</tr></thead><tbody>'+rows_+'</tbody></table></div>',unsafe_allow_html=True)
+  st.caption('Additional options will appear only when generated by the treatment logic. All proposals remain conditional on the recorded data and clinical verification.')
+  with st.expander('Anatomical considerations, feasibility & rationale',expanded=False):
+   for plan_ in comparison_plans_:
+    st.markdown('**OPTION '+plan_['key']+' — '+plan_['title']+'**')
+    for line_ in plan_['anatomy']:st.write('• '+line_)
+    st.write('Preoperative feasibility: '+plan_['status'])
+    alignment_=tp_patient_alignment(plan_)
+    if alignment_:st.write('Patient-centered value: '+alignment_)
+    st.write('Benefit: '+plan_['pros'])
+    st.write('Limitations: '+plan_['limits'])
+    st.write('Macrodesign rationale: '+PROFILES[plan_['family']][1])
+    if plan_['protocol']['evidence']:
+     st.caption('Evidence classification: '+plan_['protocol']['evidence'])
+    sz_=plan_['sizes']
+    if sz_['pick']:
+     st.caption('Catalog screening · diameters: '+', '.join('Ø'+tp_fmt(v)+' mm' for v in sz_['diameters'])+' · lengths for candidate diameter: '+', '.join(str(v)+' mm' for v in sz_['lengths']))
 
   # Keep choices editable without obstructing the treatment comparison.
   with st.expander('Edit clinical decisions · CTG, FGG, GBR, loading & restoration',expanded=False):
