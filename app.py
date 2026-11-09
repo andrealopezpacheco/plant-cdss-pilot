@@ -171,7 +171,10 @@ CASE_TYPES = {
 SITE = {
  'CASE-SITE-EXTRACT':'Tooth present and requiring extraction',
  'CASE-SITE-SOFT':'Edentulous ridge · soft tissue healing (4–8 weeks post-extraction)',
+  'CASE-SITE-VERYEARLY':'Extraction completed · less than 4 weeks',
+  'CASE-SITE-INTERVAL1':'Extraction completed · more than 8 to less than 12 weeks',
  'CASE-SITE-PARTIAL':'Edentulous ridge · partial bone healing (12–16 weeks post-extraction)',
+  'CASE-SITE-INTERVAL2':'Extraction completed · more than 16 weeks to 6 months',
  'CASE-SITE-HEALED':'Completely healed edentulous ridge (>6 months post-extraction)'
 }
 # Universal / FDI equivalences for permanent teeth (numeric pairs).
@@ -306,7 +309,7 @@ def implant_level():
  if reasons:return 'BL',reasons,missing
  return (None if missing else 'TL'),reasons,missing
 
-GBR_CRITERIA=(('gbrc_pos','3D implant position is prosthetically adequate','GBRC-POS'),('gbrc_stab','Primary stability is achievable','GBRC-STAB'),('gbrc_morph','Defect morphology favors graft stabilization and space maintenance','GBRC-MORPH'),('gbrc_clos','Soft tissues allow tension-free closure','GBRC-CLOS'))
+GBR_CRITERIA=(('gbrc_pos','3D implant position is prosthetically adequate','GBRC-POS'),('gbrc_stab','CBCT anatomy appears to permit an anchorage trajectory (not achieved stability)','GBRC-STAB'),('gbrc_morph','Defect morphology favors graft stabilization and space maintenance','GBRC-MORPH'),('gbrc_clos','Soft tissues allow tension-free closure','GBRC-CLOS'))
 
 def gbr_support():
  # Guidance for simultaneous vs staged GBR (Yu, Saleh, Wang 2023; Jung 2017). Orientative, never an automatic indication.
@@ -805,6 +808,81 @@ def tp_restoration_text():
  }.get(access,'Screw-access axis not assessed; straight vs angled channel remains open.')
  return ret,acc
 
+# Gallucci et al., Clin Implant Dent Relat Res 2026: placement x loading terminology.
+# Decision logic below is a PREOPERATIVE project interpretation, not a
+# validated predictor of patient-level survival or an intraoperative loading clearance.
+GALLUCCI_EVIDENCE = {
+ '1A': 'SCV', '1B': 'CD', '1C': 'SCV',
+ '2–3A': 'SCV', '2–3B': 'CD', '2–3C': 'SCV',
+ '4A': 'SCV', '4B': 'SCV', '4C': 'SCV',
+}
+
+def tp_placement_group(plan):
+ """Estimate placement class from clinical site; staged changes are unclassified."""
+ site=r('site')
+ if plan.get('post'):
+  return None,'Staged intervention: timing of implant placement cannot be assigned until the planned post-extraction/reconstruction healing interval is known.'
+ if site=='CASE-SITE-EXTRACT':
+  # The contemporaneous plan can be immediate only if it has not been staged.
+  return '1','Type 1 candidate: extraction and implant placement in the same intervention.'
+ if site=='CASE-SITE-SOFT':return '2–3','Type 2 timing: 4–8 weeks after extraction.'
+ if site=='CASE-SITE-PARTIAL':return '2–3','Type 3 timing: 12–16 weeks after extraction.'
+ if site=='CASE-SITE-HEALED':return '4','Type 4 timing: healed ridge, >6 months after extraction.'
+ return None,'The recorded healing interval is not within the defined Type 1/2/3/4 windows; assess timing individually before assigning a Gallucci code.'
+
+def tp_loading_candidates(placement):
+ """Prioritize candidate loading times without asking for actual implant stability."""
+ needs=r('needs',[]) or []
+ urgency=r('esthetic')=='Yes' or any(n in needs for n in ('PAT-NEED-ESTH','PAT-NEED-TIME','PAT-NEED-VISITS'))
+ para=r('pro_para')
+ abnormal=para in ('PRO-PARA-SELF','PRO-PARA-SUSPECTED','PRO-PARA-BOTH')
+ occlusal=r('pro_plane')
+ risk=abnormal or occlusal in ('PRO-PLANE-ALTERED','PRO-PLANE-NOTASSESSABLE')
+ unknown_occlusion=para is None or occlusal is None
+ # Conventional is always the fallback; do not infer success of immediate loading.
+ if urgency and not risk and not unknown_occlusion:return ['A','C'], 'Patient priorities justify considering immediate provisionalization, conditional on intraoperative stability, implant position and control of loading.'
+ if urgency and (risk or unknown_occlusion):return ['C','A'], 'Unknown or unfavorable occlusal/parafunctional findings favor a conservative preliminary pathway; immediate provisionalization remains a conditional alternative.'
+ return ['C','A'], 'Without a patient-centered reason for immediate restoration, conventional loading is the neutral initial pathway.'
+
+def tp_protocol_for_plan(plan, loading_letter):
+ group,placement_note=tp_placement_group(plan)
+ if group is None:
+  return dict(code=None, name='Placement/loading protocol pending',evidence=None,placement=placement_note,
+              loading='Timing must be assigned after site reassessment.', provisional='Use a non-implant provisional restoration when appropriate.')
+ code=group+loading_letter
+ names={'A':'Immediate restoration / loading (≤1 week)',
+        'B':'Early loading (>1 week to <2 months)',
+        'C':'Conventional loading (≥2 months)'}
+ return dict(code=code,name=names[loading_letter],evidence=GALLUCCI_EVIDENCE.get(code),placement=placement_note,
+             loading=('Immediate PMMA implant-supported provisional may be considered if anatomic, stability and occlusal criteria are confirmed during surgery; distinguish non-functional restoration from functional loading.' if loading_letter=='A' else
+                      'Early implant-supported restoration only after a clinical stability reassessment.' if loading_letter=='B' else
+                      'Allow conventional healing before implant loading; consider Essix, adhesive provisional or another non-implant-supported interim solution if needed.'),
+             provisional=('PMMA provisional concept; verify available restorative space, components, fixation and occlusal design.' if loading_letter=='A' else 'Definitive material is selected according to restorative needs and is not dictated by the Gallucci code.'))
+
+def tp_augmentation_summary():
+ rec=tp_procedure_recommendations()
+ lines=[]
+ if rec['GBR']['status']=='suggested':
+  lines.append('GBR / bone reconstruction assessment: '+('; '.join(rec['GBR']['why'][:2]))+' Confirm whether simultaneous GBR, staged augmentation or a different implant dimension is appropriate; inter-root space cannot be increased by GBR.')
+ elif rec['GBR']['status']=='pending':lines.append('GBR: cannot rule out until missing measurements and defect information are completed.')
+ if rec['CTG']['status']=='suggested':
+  lines.append('CTG / soft-tissue optimization to assess: '+('; '.join(rec['CTG']['why'][:2]))+' Vertical supracrestal tissue height gain is not guaranteed.')
+ elif rec['CTG']['status']=='pending':lines.append('CTG: volume/thickness assessment pending.')
+ if rec['FGG']['status']=='suggested':lines.append('FGG or another keratinized tissue augmentation technique to assess: '+('; '.join(rec['FGG']['why'][:2])))
+ elif rec['FGG']['status']=='pending':lines.append('Keratinized tissue assessment pending.')
+ if not lines:lines.append('No augmentation screening trigger detected in the recorded measurements; verify 3D anatomy and tissue suitability.')
+ return lines
+
+def tp_maintenance_guidance():
+ # Missing medical history must not be interpreted as a low-risk patient.
+ conditions=[r('history_periodontitis'),r('smoking_status'),r('diabetes_control'),r('hygiene_ability')]
+ if any(x is None for x in conditions):
+  return 'Recall interval pending a structured patient-risk assessment (periodontal history, tobacco exposure, diabetes control and hygiene capacity). Age alone is not a recall criterion.'
+ high=(r('history_periodontitis')=='PAT-PERIO-YES' or r('smoking_status')=='Current tobacco use'
+       or r('diabetes_control')=='Diabetes: not well controlled' or r('hygiene_ability')=='Difficult')
+ if high:return 'Consider supportive peri-implant maintenance every 3–4 months initially; re-evaluate according to actual periodontal/peri-implant findings and plaque control.'
+ return 'Consider supportive peri-implant maintenance every 4–6 months, individualized following baseline clinical assessment and reviewed over time.'
+
 def tp_build_plans():
  'Two comparative pathways; unresolved/unfeasible ideas are clearly labeled.'
  level,reasons,missing=implant_level()
@@ -868,6 +946,13 @@ def tp_build_plans():
  else:
   a.update(title='Direct Placement Strategy',subtitle='No additional regeneration if truly unnecessary',surgery='Assess direct placement within the existing ridge; confirm primary stability, 3D restoration-guided position and soft-tissue adequacy.',pros='Can avoid augmentation if sufficient bone and tissues are confirmed.',limits='Do not treat incomplete tissue, bone or sinus findings as absence of a defect.')
   b.update(title='Alternative Implant Design',subtitle='Same surgical pathway, different macrodesign',surgery='Compare the same non-regenerative surgical pathway using an alternative implant geometry and its drilling protocol.',pros='A second implant-design option without inventing a reconstructive indication.',limits='The design comparison is not evidence that a different implant is superior for this patient.')
+ # Overlay a Gallucci protocol on each existing surgical alternative.
+ candidate_letters, loading_reason=tp_loading_candidates(None)
+ for i,p in enumerate(plans):
+  p['protocol']=tp_protocol_for_plan(p,candidate_letters[i])
+  p['loading_rationale']=loading_reason
+  p['augmentations']=tp_augmentation_summary()
+  p['maintenance']=tp_maintenance_guidance()
  for p in plans:
   access_text,_=tp_surgical_access_guidance()
   p['surgery']+=' Surgical access: '+access_text
@@ -962,6 +1047,11 @@ if step==0:
   ranked=field('top_priority',st.selectbox,'Most important concern',default=NO_PRIORITY,options=prio_opts,format_func=lambda k:PRIORITY_LABELS[k])
   if r('top_priority')==NO_PRIORITY:st.caption('No single priority is highlighted; the selected concerns are shown without ranking.')
   else:st.caption('This priority influences how viable plans are compared, not clinical eligibility.')
+ st.markdown('**Patient-reported risk factors for maintenance planning**')
+ pick('history_periodontitis','History of periodontitis',opts('PERIO',[('YES','Yes',''),('NO','No','')],prefix='PAT'),'Patient history only. Confirm periodontal condition clinically when available.')
+ field('smoking_status',st.selectbox,'Tobacco exposure',default=None,options=['Never','Former tobacco use','Current tobacco use'],index=None,placeholder='Not reported')
+ field('diabetes_control',st.selectbox,'Diabetes history / reported control',default=None,options=['No known diabetes','Diabetes: well controlled','Diabetes: not well controlled'],index=None,placeholder='Not reported')
+ field('hygiene_ability',st.selectbox,'Patient-reported ability to maintain oral hygiene',default=None,options=['Adequate','Difficult'],index=None,placeholder='Not reported')
  if r('age')=='PAT-AGE-U18':notice('Assess completion of craniofacial growth; avoid assuming implant eligibility from chronological age alone.')
  if r('age')=='PAT-AGE-O60P':st.info('Evaluate individual dexterity, medical status and maintenance needs; age alone is not a contraindication.')
 
@@ -1148,7 +1238,7 @@ elif step==4:
    st.warning(alert_)
   result_=tp_build_plans()
   # Only a brief, contextual bridge between clinical findings and choices.
-  st.markdown('<div class="section-label" style="margin:12px 0 10px">Two treatment pathways to review</div>',unsafe_allow_html=True)
+  st.markdown('<div class="section-label" style="margin:12px 0 10px">Treatment proposals · Gallucci placement and loading protocols</div>',unsafe_allow_html=True)
   if result_['mode']=='sinus':
    st.caption('Posterior maxillary site with '+tp_fmt(r('ridge_height'))+' mm residual height. This triggers a comparison, not an automatic indication for sinus elevation or for a short implant.')
   elif result_['mode']=='space':
@@ -1159,7 +1249,14 @@ elif step==4:
     with st.container(border=True):
      chip_class_='tp-chip' if plan_['key']=='A' else 'tp-chip alt'
      st.markdown('<div class="'+chip_class_+'">OPTION '+plan_['key']+'</div><div class="tp-head"><div class="tp-title">'+escape(plan_['title'])+'</div><div class="tp-sub">'+escape(plan_['subtitle'])+'</div></div>',unsafe_allow_html=True)
-     st.markdown('<div class="tp-slab"><h4>🩺 Surgical pathway</h4><p>'+escape(plan_['surgery'])+'</p></div>',unsafe_allow_html=True)
+     protocol_=plan_['protocol']
+     if protocol_['code']:
+      st.markdown('### Protocol '+protocol_['code'])
+      st.caption(protocol_['placement']+' · '+protocol_['name']+' · '+('SCV' if protocol_['evidence']=='SCV' else 'Clinically documented: limited evidence'))
+     else:st.warning(protocol_['name']+': '+protocol_['placement'])
+     st.markdown('<div class="tp-slab"><h4>🩺 Surgical approach</h4><p>'+escape(plan_['surgery'])+'</p></div>',unsafe_allow_html=True)
+     st.markdown('**Site-derived augmentation assessment**')
+     for aug_ in plan_['augmentations']:st.write('• '+aug_)
      alignment_=tp_patient_alignment(plan_)
      if alignment_:
       st.markdown('<div class="tp-state"><b>Patient-centered value:</b> '+escape(alignment_)+'</div>',unsafe_allow_html=True)
@@ -1176,7 +1273,9 @@ elif step==4:
      else:
       st.caption('No dimensions cleared yet: '+sz_['reason'])
      st.markdown('<div class="tp-slab"><h4>⚙️ Preliminary restorative strategy</h4><p>'+escape(tp_restoration_text()[0])+'</p><p>'+escape(tp_restoration_text()[1])+'</p></div>',unsafe_allow_html=True)
-     st.markdown('<div class="tp-state"><b>Feasibility:</b> '+escape(plan_['status'])+'</div>',unsafe_allow_html=True)
+     st.markdown('<div class="tp-slab"><h4>⚙️ Prosthetic approach</h4><p>'+escape(protocol_['loading'])+'</p><p>'+escape(protocol_['provisional'])+'</p></div>',unsafe_allow_html=True)
+     st.markdown('<div class="tp-slab"><h4>🗓️ Maintenance protocol</h4><p>'+escape(plan_['maintenance'])+'</p></div>',unsafe_allow_html=True)
+     st.markdown('<div class="tp-state"><b>Preoperative feasibility:</b> '+escape(plan_['status'])+'</div>',unsafe_allow_html=True)
      with st.expander('Benefits, limitations & rationale'):
       st.markdown('**Benefit:** '+plan_['pros'])
       st.markdown('**Limitations:** '+plan_['limits'])
@@ -1192,13 +1291,14 @@ elif step==4:
     pick('ctg_planned','Clinician decision: simultaneous CTG?',yesno('CTG'),'This does not erase an automatic CTG assessment trigger. CTG can add volume but predictable vertical STH gain cannot be assumed.')
     pick('fgg_timing','Clinician decision: keratinized-tissue augmentation',opts('FGG',[('REVIEW','Undecided / review FGG or alternatives',''),('SIMULT','Consider FGG simultaneous',''),('STAGED','Consider FGG before implant placement',''),('LATER','Consider FGG after restoration / placement',''),('NO','Not planned (document rationale)','')],prefix='IMP'),'FGG is primarily used to increase keratinized mucosa; the exact approach is influenced by site and treatment stage.')
     st.caption('STH is evaluated automatically using the clinician-defined <2.0 mm review trigger; the numeric measurement comes from Surgical Assessment. Vertical graft outcome is not assumed.')
-    if r('site')=='CASE-SITE-EXTRACT':pick('immediate_placement','Immediate placement in extraction socket?',yesno('IMMPL'),'Confirm intact/compromised socket, sufficient bone for anchorage and restoration-guided 3D position.')
-    else:clear('immediate_placement')
+    st.caption('Immediate-placement eligibility is screened automatically from site timing and CBCT information; no surgical outcome is requested.')
+    clear('immediate_placement')
    with ct:
     pick('gbr_approach','Bone-regeneration approach under consideration',opts('GBR',[('NONE','No GBR planned',''),('SIMULT','Simultaneous GBR','Implant placement and localized bone regeneration in one intervention, only when all surgical conditions support it.'),('STAGED','Staged GBR before implant','Reconstruct first, reassess after healing and then choose implant design/dimensions.')],prefix='IMP'),'Select an intended approach to compare, not a permission to bypass constraints.')
     if r('gbr_approach')=='IMP-GBR-STAGED':pick('staged_status','Status of staged GBR',opts('STG',[('PENDING','Not yet performed','Implant selection must be deferred.'),('HEALED','Healed and reevaluated','The anatomical measurements refer to the healed augmented site.')],prefix='IMP'))
     else:clear('staged_status')
-    pick('immediate_loading','Immediate provisionalization or loading planned?',yesno('IMMLD'),'Conventional loading is the default comparison if esthetic concern = No. Immediate loading, if specifically chosen, still requires validated stability and occlusal criteria; esthetic concern alone is not a loading indication.')
+    st.caption('Loading candidates are generated from preoperative findings and patient priorities. Primary stability will only be confirmed intraoperatively.')
+    clear('immediate_loading')
     if r('esthetic')=='No':st.caption('No esthetic concern: the CDSS will NOT prioritize an immediate protocol as its first plan, even when selected for discussion.')
    support_=gbr_support()
    if support_:
@@ -1311,6 +1411,7 @@ elif step==7:
  st.markdown('### Maintenance Program · proposed considerations')
  patient_context()
  st.markdown('**Maintenance recommendations must be individualized after baseline assessment.**')
+ st.info('Preoperative recall suggestion: '+tp_maintenance_guidance())
  st.write('✅ Record baseline soft-tissue and radiographic parameters after prosthesis delivery.')
  st.write('✅ Assess plaque control, probing parameters, restorability, access for hygiene, and patient ability to attend recall visits.')
  st.write('⚠️ Periodontal history, smoking, prosthetic cleansability and peri-implant findings may modify follow-up intervals.')
